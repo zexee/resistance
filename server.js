@@ -2,7 +2,35 @@ const express = require('express');
 const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
+const cookieParser = require('cookie-parser');
+const bodyParser = require('body-parser')
+const fs = require('fs') // this engine requires the fs module
+app.engine('ntl', function (filePath, options, callback) { // define the template engine
+  fs.readFile(filePath, function (err, content) {
+    if (err) return callback(err)
+    // this is an extremely simple template engine
+    var rendered = content.toString().replace('#name#', options.name)
+    return callback(null, rendered)
+  })
+})
+app.set('views', './views') // specify the views directory
+app.set('view engine', 'ntl') // register the template engine
 
+app.use(cookieParser());
+app.use(bodyParser.json());       // to support JSON-encoded bodies
+app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
+  extended: true
+}));
+
+app.get('/', function (req, res) {
+  res.render('index', { name: req.cookies.name ? req.cookies.name : 'Harry Potter' })
+})
+
+app.post('/setname', function (req, res) {
+  var name = req.body.name;
+  res.cookie('name', name);
+  res.json({ok:1});
+})
 app.use(express.static(__dirname + '/public'));
 
 votes = [[], [], [], [], []];

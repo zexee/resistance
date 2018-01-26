@@ -106,7 +106,11 @@
       var me = null;
       var socket = null;
       function Connect() {
-        me = prompt("Please enter your name", "Harry Potter");
+        me = prompt("Please enter your name", "#name#");
+        if (me == null) me = 'UNKNOWN';
+        $.post('/setname', {name: me}, function(data) {
+          console.log(data);
+        });
         $('#me').html(me);
         socket = io();
         socket.on('connect', function(data) {
