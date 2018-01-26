@@ -1,6 +1,8 @@
 <!DOCTYPE HTML>
 <html>
 	<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no"/>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<title>Resistance</title>
     <script src="3rd/jquery.min.js"></script>
@@ -87,23 +89,43 @@
           <a class="navbar-brand">Resistance</a>
         </div>
         <ul class="nav navbar-nav">
-          <li><a>Currently in Game <span id="joined"></span></a></li>
+          <li class="bg-info"><a>Currently in Game <span style="font-weight:bolder;" id="joined"></span></a></li>
           <li><button class="btn navbar-btn btn-info" onclick="Start();">Start</button></li>
-          <li><a><span id="WARNING">Connected</span></a></li>
+          <li><a><span id="WARNING"><span class="text-success">CONNECTED</span></span></a></li>
+          <li class="bg-success"><a href="https://en.wikipedia.org/wiki/The_Resistance_(game)" target="_blank">How to Play</a></li>
         </ul>
       </div>
     </nav>
     <div class="container-fluid">
-      <div class="well well-sm col-lg-12">
-        <table class="table">
-          <p>Player number <span id="playern"></span>, Spys number <span id="spyn"></span></p>
-          <tr><th>Round</th><th>Votes</th><th>Action</th></tr>
-          <tr><td>1 (<span id="voten0"></span>)</td><td><span id="0"></span></td><td><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></td></tr>
-          <tr><td>2 (<span id="voten1"></span>)</td><td><span id="1"></span></td><td><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></td></tr>
-          <tr><td>3 (<span id="voten2"></span>)</td><td><span id="2"></span></td><td><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></td></tr>
-          <tr><td>4 (<span id="voten3"></span>)</td><td><span id="3"></span></td><td><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></td></tr>
-          <tr><td>5 (<span id="voten4"></span>)</td><td><span id="4"></span></td><td><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></td></tr>
-        </table>
+      <div class="col-lg-12">
+        <h3>Players number <span id="playern"></span>, Spys number <span id="spyn"></span></h3>
+        <div class="row">
+          <div class="well well-sm col-lg-2">
+            <p>Round 1 (<span id="voten0"></span>)</p>
+            <p><span id="0"></span></p>
+            <p><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></p>
+          </div>
+          <div class="well well-sm col-lg-2">
+            <p>Round 2 (<span id="voten1"></span>)</p>
+            <p><span id="1"></span></p>
+            <p><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></p>
+          </div>
+          <div class="well well-sm col-lg-2">
+            <p>Round 3 (<span id="voten2"></span>)</p>
+            <p><span id="2"></span></p>
+            <p><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></p>
+          </div>
+          <div class="well well-sm col-lg-2">
+            <p>Round 4 (<span id="voten3"></span>)</p>
+            <p><span id="3"></span></p>
+            <p><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></p>
+          </div>
+          <div class="well well-sm col-lg-2">
+            <p>Round 5 (<span id="voten4"></span>)</p>
+            <p><span id="4"></span></p>
+            <p><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></p>
+          </div>
+        </div>
       </div>
     </div>
 	</body>

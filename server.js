@@ -72,10 +72,11 @@ io.on('connect', function(socket) {
   });
   socket.on('vote', function(data) {
     if (n < 5 || n > 10) return;
+    if (votes[data.round].length == param[n][data.round]) return;
     console.log('vote', data);
     if (socket.voted[data.round] == undefined) {
       votes[data.round].push(data.vote);
-      socket.voted[data.round] = 1;
+      socket.voted[data.round] = data.vote;
     }
     if (votes[data.round].length == param[n][data.round]) {
 			votes[data.round] = shuffle(votes[data.round]);
