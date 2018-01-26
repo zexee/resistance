@@ -58,30 +58,29 @@
             if (j == 'who' || j == 'text') continue;
             ++all;
             if (p[j] == 1) {
-              votes.push(' <span class="label label-success">' + j + '</span>');
+              votes.push(' <span class="label label-success">' + unescape(j) + '</span>');
               ++yes;
             } else {
-              votes.push(' <span class="label label-danger">' + j + '</span>');
+              votes.push(' <span class="label label-danger">' + unescape(j) + '</span>');
             }
           }
           if (yes > all / 2.0) {
-            html += '<li class="list-group-item list-group-item-success">' +
-              p.who + ': ' + p.text + '<p>' + votes.join('') + '</p></li>';
+            html += '<li class="list-group-item list-group-item-success">';
           } else {
-            html += '<li class="list-group-item list-group-item-danger">' +
-              p.who + ': ' + p.text + '<p>' + votes.join('') + '</p></li>';
+            html += '<li class="list-group-item list-group-item-danger">';
           }
+          html += unescape(p.who) + ': ' + unescape(p.text) + '<p>' + votes.join('') + '</p></li>';
         }
         $('#proposals').html(html);
         
         html = '';
         if (data.proposal['text'] != undefined) {
           var p = data.proposal;
-          html += '<h3><span style="font-weight:bold">' + p.who + '</span>: <span class="text-primary">' + p.text + '</span></h3>'
+          html += '<h3><span style="font-weight:bold">' + unescape(p.who) + '</span>: <span class="text-primary">' + unescape(p.text) + '</span></h3>'
           var votes = [];
           for (var j in p) {
             if (j == 'who' || j == 'text') continue;
-            votes.push('<span class="label label-warning">' + j + '</span>');
+            votes.push('<span class="label label-warning">' + unescape(j) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
         }
@@ -96,11 +95,11 @@
       }
       function Join(data) {
         $('#joined').html(data.names.length);
-        $('#names').html(data.names.join(' | '));
+        $('#names').html(unescape(data.names.join(' | ')));
         var html = '';
         for (var i in data.names) {
           var name = data.names[i];
-          html += '<li><input type="checkbox" value="' + name + '">' + name + '</li>';
+          html += '<li><input type="checkbox" value="' + name + '">' + unescape(name) + '</li>';
         }
         $('#name_checks').html(html);
       }
@@ -111,7 +110,7 @@
         $('#me').html(me);
         socket = io();
         socket.on('connect', function(data) {
-          socket.emit('me', {'name': me});
+          socket.emit('me', {'name': escape(me)});
         });
         socket.on('disconnect', function(data) {
           $('#WARNING').html('DISCONNECTED');
