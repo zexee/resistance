@@ -1,0 +1,110 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>Resistance</title>
+    <script src="3rd/jquery.min.js"></script>
+    <script src="3rd/socket.io.min.js"></script>
+    <link href="3rd/font-awesome.min.css" rel="stylesheet">
+    <link href="3rd/bootstrap.min.css" rel="stylesheet">
+    <link href="3rd/bootstrap-theme.min.css" rel="stylesheet">
+    <script src="3rd/bootstrap.min.js"></script>
+    <style>
+      .label {
+        font-size:100%;
+      }
+    </style>
+
+		<script type="text/javascript">
+      var playern = 0;
+      function fill(data) {
+        if (data[0] == undefined) return;
+        playern = data.n;
+        $('#playern').html(data.n);
+        $('#spyn').html(data.param[5]);
+        for (var i = 0; i < 5; ++i) {
+          if (data[i].votes != undefined) {
+            var html = '';
+            var result = 1;
+            for (var j in data[i].votes) {
+              var vote = data[i].votes[j];
+              if (vote == 1) html += '<span class="label label-success">Pass</span>';
+              else html += '<span class="label label-danger">Fail</span>';
+              if (vote == 0) --result;
+            }
+            if (playern >= 7 && i == 3) {
+              if (result == 0) result = 1;
+            }
+            if (result == 1) html = 'Passed ' + html;
+            else html = 'Failed ' + html;
+            $('#' + i).html(html);
+          } else {
+            $('#' + i).html(data[i].voten);
+          }
+          $('#voten' + i).html(data[i].n);
+          if (i == 3 && playern >= 7) {
+            $('#voten3').html(data[3].n + '*');
+          }
+        }
+      }
+      function join(data) {
+        $('#joined').html(data.n);
+      }
+      var socket = null;
+      function Connect() {
+        socket = io();
+        socket.on('connect', function(data) {});
+        socket.on('disconnect', function(data) {
+          $('#WARNING').html('DISCONNECTED');
+        });
+        socket.on('votes', function(data) {
+          fill(data);
+        });
+        socket.on('join', function(data) {
+          join(data);
+        });
+        socket.on('role', function(data) {
+          if (data.role == 0) alert('You are a SPY.');
+          else alert('You are a RESISTANCE MEMBER.');
+        });
+      }
+      $(document).ready(Connect);
+      function Start() {
+        socket.emit('start');
+      }
+      function Pass(round) {
+        socket.emit('vote', {round: round, vote: 1});
+      }
+      function Fail(round) {
+        socket.emit('vote', {round: round, vote: 0});
+      }
+		</script>
+	</head>
+	<body>
+    <nav class="navbar navbar-default">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <a class="navbar-brand">Resistance</a>
+        </div>
+        <ul class="nav navbar-nav">
+          <li><a>Currently in Game <span id="joined"></span></a></li>
+          <li><button class="btn navbar-btn btn-info" onclick="Start();">Start</button></li>
+          <li><a><span id="WARNING">Connected</span></a></li>
+        </ul>
+      </div>
+    </nav>
+    <div class="container-fluid">
+      <div class="well well-sm col-lg-12">
+        <table class="table">
+          <p>Player number <span id="playern"></span>, Spys number <span id="spyn"></span></p>
+          <tr><th>Round</th><th>Votes</th><th>Action</th></tr>
+          <tr><td>1 (<span id="voten0"></span>)</td><td><span id="0"></span></td><td><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></td></tr>
+          <tr><td>2 (<span id="voten1"></span>)</td><td><span id="1"></span></td><td><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></td></tr>
+          <tr><td>3 (<span id="voten2"></span>)</td><td><span id="2"></span></td><td><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></td></tr>
+          <tr><td>4 (<span id="voten3"></span>)</td><td><span id="3"></span></td><td><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></td></tr>
+          <tr><td>5 (<span id="voten4"></span>)</td><td><span id="4"></span></td><td><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></td></tr>
+        </table>
+      </div>
+    </div>
+	</body>
+</html>
