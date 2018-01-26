@@ -19,7 +19,7 @@
 
 		<script type="text/javascript">
       var playern = 0;
-      function fill(data) {
+      function Fill(data) {
         if (data[0] == undefined) return;
         playern = data.n;
         $('#playern').html(data.n);
@@ -48,22 +48,79 @@
             $('#voten3').html(data[3].n + '*');
           }
         }
+        html = '';
+        for (var i in data.proposals) {
+          var p = data.proposals[i];
+          var votes = [];
+          var yes = 0;
+          var all = 0;
+          for (var j in p) {
+            if (j == 'who' || j == 'text') continue;
+            ++all;
+            if (p[j] == 1) {
+              votes.push(' <span class="label label-success">' + j + '</span>');
+              ++yes;
+            } else {
+              votes.push(' <span class="label label-danger">' + j + '</span>');
+            }
+          }
+          if (yes > all / 2.0) {
+            html += '<li class="list-group-item list-group-item-success">' +
+              p.who + ': ' + p.text + '<p>' + votes.join('') + '</p></li>';
+          } else {
+            html += '<li class="list-group-item list-group-item-danger">' +
+              p.who + ': ' + p.text + '<p>' + votes.join('') + '</p></li>';
+          }
+        }
+        $('#proposals').html(html);
+        
+        html = '';
+        if (data.proposal['text'] != undefined) {
+          var p = data.proposal;
+          html += '<h3><span style="font-weight:bold">' + p.who + '</span>: <span class="text-primary">' + p.text + '</span></h3>'
+          var votes = [];
+          for (var j in p) {
+            if (j == 'who' || j == 'text') continue;
+            votes.push('<span class="label label-warning">' + j + '</span>');
+          }
+          html += '<p>' + votes.join(' ') + '</p>';
+        }
+        $('#proposal').html(html);
       }
-      function join(data) {
-        $('#joined').html(data.n);
+      function Propose() {
+        var text = [];
+        $('input[type=checkbox]').each(function () {
+          if (this.checked) text.push(this.value);
+        });
+        socket.emit('propose', {text: text.join(', ')});
       }
+      function Join(data) {
+        $('#joined').html(data.names.length);
+        $('#names').html(data.names.join(' | '));
+        var html = '';
+        for (var i in data.names) {
+          var name = data.names[i];
+          html += '<li><input type="checkbox" value="' + name + '">' + name + '</li>';
+        }
+        $('#name_checks').html(html);
+      }
+      var me = null;
       var socket = null;
       function Connect() {
+        me = prompt("Please enter your name", "Harry Potter");
+        $('#me').html(me);
         socket = io();
-        socket.on('connect', function(data) {});
+        socket.on('connect', function(data) {
+          socket.emit('me', {'name': me});
+        });
         socket.on('disconnect', function(data) {
           $('#WARNING').html('DISCONNECTED');
         });
         socket.on('votes', function(data) {
-          fill(data);
+          Fill(data);
         });
         socket.on('join', function(data) {
-          join(data);
+          Join(data);
         });
         socket.on('role', function(data) {
           if (data.role == 0) alert('You are a SPY.');
@@ -80,6 +137,12 @@
       function Fail(round) {
         socket.emit('vote', {round: round, vote: 0});
       }
+      function Yes() {
+        socket.emit('yes');
+      }
+      function No() {
+        socket.emit('no');
+      }
 		</script>
 	</head>
 	<body>
@@ -89,17 +152,27 @@
           <a class="navbar-brand">Resistance</a>
         </div>
         <ul class="nav navbar-nav">
-          <li class="bg-info"><a>Currently in Game <span style="font-weight:bolder;" id="joined"></span></a></li>
+          <li class="bg-info" style="font-weight:bolder; color:blue;"><a><span id="me"></span></a></li>
           <li><button class="btn navbar-btn btn-info" onclick="Start();">Start</button></li>
           <li><a><span id="WARNING"><span class="text-success">CONNECTED</span></span></a></li>
-          <li class="bg-success"><a href="https://en.wikipedia.org/wiki/The_Resistance_(game)" target="_blank">How to Play</a></li>
         </ul>
       </div>
     </nav>
     <div class="container-fluid">
       <div class="col-lg-12">
+        <h2>In Room (<span style="font-weight:bolder;" id="joined"></span>) <span class="text-primary" id="names"></span></h2>
         <h3>Players number <span id="playern"></span>, Spys number <span id="spyn"></span></h3>
         <div class="row">
+          <div class="well well-sm col-lg-12">
+            <ul class="list-group" id="proposals"></ul>
+            <div class="well well-sm">
+              <ul id="name_checks"></ul>
+              <button class="btn btn-primary" onclick="Propose()">Propose</button>
+            </div>
+            <div class="bg-info" id="proposal"></div>
+            <button class="btn btn-success" onclick="Yes()">Yes</button>
+            <button class="btn btn-danger" onclick="No()">No</button>
+          </div>
           <div class="well well-sm col-lg-2">
             <p>Round 1 (<span id="voten0"></span>)</p>
             <p><span id="0"></span></p>

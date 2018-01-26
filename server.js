@@ -15,6 +15,8 @@ var param = {
   10: [3, 4, 4, 5, 5, 4]
 };
 var n = 0;
+var proposals = [];
+var current_proposal = {};
 
 function shuffle(a) {
 	for (var i = a.length - 1; i > 0; i--) {
@@ -24,6 +26,14 @@ function shuffle(a) {
     a[i] = x;
 	}
 	return a;
+}
+
+function objlength(obj) {
+  var n = 0;
+  for (var i in obj) {
+    ++n;
+  }
+  return n;
 }
 
 function send_votes(socket) {
@@ -37,27 +47,40 @@ function send_votes(socket) {
     }
     data[i]['n'] = param[n][i];
   }
-  socket.emit('votes', data);
-}
-
-function objlength(obj) {
-  var n = 0;
-  for (var i in obj) {
-    ++n;
+  data.proposals = proposals;
+  var current = {}
+  if (current_proposal['text'] != undefined) {
+    for (var k in current_proposal) {
+      if (k == 'text' || k == 'who') current[k] = current_proposal[k];
+      else current[k] = '0';
+    }
   }
-  return n;
+  data.proposal = current;
+  socket.emit('votes', data);
 }
 
 io.on('connect', function(socket) {
   console.log('New IO connection.', socket.request.connection.remoteAddress);
   socket.voted = {};
-  io.sockets.emit('join', {'n': objlength(io.sockets.sockets)});
   send_votes(socket);
+  socket.on('me', function(data) {
+    socket.name = data.name;
+    var names = [];
+    for (var i in io.sockets.sockets) {
+      if (io.sockets.sockets[i]['name'] != undefined)
+        names.push(io.sockets.sockets[i]['name']);
+      else
+        names.push('SOMEONE');
+    }
+    io.sockets.emit('join', {'names': names});
+  });
   socket.on('start', function(data) {
     n = objlength(io.sockets.sockets);
     if (n < 5 || n > 10) return;
     console.log('start', n);
     votes = [[], [], [], [], []];
+    proposals = [];
+    current_proposals = {};
     send_votes(io.sockets);
     var roles = [];
     for (var i = 0; i < param[n][5]; ++i) roles.push(0);
@@ -80,6 +103,26 @@ io.on('connect', function(socket) {
     }
     if (votes[data.round].length == param[n][data.round]) {
 			votes[data.round] = shuffle(votes[data.round]);
+    }
+    send_votes(io.sockets);
+  });
+  socket.on('propose', function(data) {
+    current_proposal = {'text': data.text, 'who': socket.name};
+    send_votes(io.sockets);
+  });
+  socket.on('yes', function(data) {
+    current_proposal[socket.name] = 1;
+    if (objlength(current_proposal) == n + 2) {
+      proposals.push(current_proposal);
+      current_proposal = {};
+    }
+    send_votes(io.sockets);
+  });
+  socket.on('no', function(data) {
+    current_proposal[socket.name] = -1;
+    if (objlength(current_proposal) == n + 2) {
+      proposals.push(current_proposal);
+      current_proposal = {};
     }
     send_votes(io.sockets);
   });
