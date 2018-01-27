@@ -1,10 +1,10 @@
-const express = require('express');
-const app = express();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-const cookieParser = require('cookie-parser');
-const bodyParser = require('body-parser')
-const fs = require('fs') // this engine requires the fs module
+var express = require('express');
+var app = express();
+var server = require('http').createServer(app);
+var io = require('socket.io')(server);
+var cookieParser = require('cookie-parser');
+var bodyParser = require('body-parser')
+var fs = require('fs') // this engine requires the fs module
 app.engine('ntl', function (filePath, options, callback) { // define the template engine
   fs.readFile(filePath, function (err, content) {
     if (err) return callback(err)
@@ -33,7 +33,7 @@ app.post('/setname', function (req, res) {
 })
 app.use(express.static(__dirname + '/public'));
 
-votes = [[], [], [], [], []];
+var votes = [[], [], [], [], []];
 var param = {
   5: [2, 3, 2, 3, 3, 2],
   6: [2, 3, 4, 3, 4, 2],
@@ -47,8 +47,9 @@ var proposals = [];
 var current_proposal = {};
 
 function shuffle(a) {
-	for (var i = a.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
+	for (var i = a.length - 1; i > 0; --i) {
+    var r = Math.random();
+		var j = Math.floor(r * (i + 1));
     var x = a[j];
     a[j] = a[i];
     a[i] = x;
@@ -114,11 +115,20 @@ io.on('connect', function(socket) {
     for (var i = 0; i < param[n][5]; ++i) roles.push(0);
     while (roles.length < n) roles.push(1);
     roles = shuffle(roles);
+    var spys = [];
     var i = 0;
     for (var s in io.sockets.sockets) {
       io.sockets.sockets[s].voted = {};
-      io.sockets.sockets[s].emit('role', {'role': roles[i]});
+      io.sockets.sockets[s].role = roles[i];
+      if (roles[i] == 0) spys.push(io.sockets.sockets[s].name);
       ++i;
+    }
+    for (var s in io.sockets.sockets) {
+      if (io.sockets.sockets[s].role == 0) {
+        io.sockets.sockets[s].emit('role', {'role': io.sockets.sockets[s].role, 'spys': spys});
+      } else {
+        io.sockets.sockets[s].emit('role', {'role': io.sockets.sockets[s].role});
+      }
     }
   });
   socket.on('vote', function(data) {

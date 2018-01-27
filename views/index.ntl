@@ -99,7 +99,7 @@
         var html = '';
         for (var i in data.names) {
           var name = data.names[i];
-          html += '<li><input type="checkbox" value="' + name + '">' + unescape(name) + '</li>';
+          html += '<div class="checkbox"><label><input type="checkbox" value="' + name + '">' + unescape(name) + '</label></div>';
         }
         $('#name_checks').html(html);
       }
@@ -114,6 +114,7 @@
         $('#me').html(me);
         socket = io();
         socket.on('connect', function(data) {
+          $('#WARNING').html('CONNECTED');
           socket.emit('me', {'name': escape(me)});
         });
         socket.on('disconnect', function(data) {
@@ -126,8 +127,30 @@
           Join(data);
         });
         socket.on('role', function(data) {
-          if (data.role == 0) alert('You are a SPY.');
-          else alert('You are a RESISTANCE MEMBER.');
+          if (data.role == 0) {
+            var msg = '';
+            if (data.spys.length == 2) {
+              msg += 'Your partner is ';
+              for (var i in data.spys) {
+                if (unescape(data.spys[i]) == me) continue;
+                msg += unescape(data.spys[i]) + '.';
+              }
+            } else {
+              msg += 'Your partners are ';
+              var s = 0;
+              for (var i in data.spys) {
+                if (unescape(data.spys[i]) == me) continue;
+                if (s == data.spys.length - 2) msg += ' and ';
+                else if (s != 0) msg += ', ';
+                msg += unescape(data.spys[i]);
+                ++s;
+              }
+              msg += '.';
+            }
+            alert(me + ', you are a SPY. ' + msg);
+          } else {
+            alert(me + ', you are a RESISTANCE MEMBER.');
+          }
         });
       }
       $(document).ready(Connect);
@@ -152,57 +175,90 @@
     <nav class="navbar navbar-default">
       <div class="container-fluid">
         <div class="navbar-header">
-          <a class="navbar-brand">Resistance</a>
+          <a class="navbar-brand">Resistance <span style="font-weight:bolder;" id="me"></span></a>
         </div>
         <ul class="nav navbar-nav">
-          <li class="bg-info" style="font-weight:bolder; color:blue;"><a><span id="me"></span></a></li>
           <li><button class="btn navbar-btn btn-info" onclick="Start();">Start</button></li>
           <li><a><span id="WARNING"><span class="text-success">CONNECTED</span></span></a></li>
         </ul>
       </div>
     </nav>
     <div class="container-fluid">
-      <div class="col-lg-12">
         <h2>In Room (<span style="font-weight:bolder;" id="joined"></span>) <span class="text-primary" id="names"></span></h2>
-        <h3>Players number <span id="playern"></span>, Spys number <span id="spyn"></span></h3>
         <div class="row">
-          <div class="well well-sm col-lg-12">
-            <ul class="list-group" id="proposals"></ul>
-            <div class="well well-sm">
-              <ul id="name_checks"></ul>
-              <button class="btn btn-primary" onclick="Propose()">Propose</button>
+          <div class="col-lg-4 col-md-6">
+            <div class="panel panel-primary">
+              <div class="panel-heading">
+                Players number <span id="playern"></span>, Spys number <span id="spyn"></span>
+              </div>
+              <div class="panel-body">
+                <ul class="list-group" id="proposals"></ul>
+                <div class="well well-sm">
+                  <div id="name_checks"></div>
+                  <button class="btn btn-primary" onclick="Propose()">Propose</button>
+                </div>
+                <div class="well well-sm" id="proposal"></div>
+                <button class="btn btn-success" onclick="Yes()">Yes</button>
+                <button class="btn btn-danger" onclick="No()">No</button>
+              </div>
             </div>
-            <div class="bg-info" id="proposal"></div>
-            <button class="btn btn-success" onclick="Yes()">Yes</button>
-            <button class="btn btn-danger" onclick="No()">No</button>
           </div>
-          <div class="well well-sm col-lg-2">
-            <p>Round 1 (<span id="voten0"></span>)</p>
-            <p><span id="0"></span></p>
-            <p><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></p>
+          <div class="col-lg-2 col-md-3">
+            <div class="panel panel-info">
+              <div class="panel-heading">
+                Round 1 (<span id="voten0"></span>)
+              </div>
+              <div class="panel-body">
+                <p><span id="0"></span></p>
+                <p><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></p>
+              </div>
+            </div>
           </div>
-          <div class="well well-sm col-lg-2">
-            <p>Round 2 (<span id="voten1"></span>)</p>
-            <p><span id="1"></span></p>
-            <p><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></p>
+          <div class="col-lg-2 col-md-3">
+            <div class="panel panel-info">
+              <div class="panel-heading">
+                Round 2 (<span id="voten1"></span>)
+              </div>
+              <div class="panel-body">
+                <p><span id="1"></span></p>
+                <p><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></p>
+              </div>
+            </div>
           </div>
-          <div class="well well-sm col-lg-2">
-            <p>Round 3 (<span id="voten2"></span>)</p>
-            <p><span id="2"></span></p>
-            <p><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></p>
+          <div class="col-lg-2 col-md-3">
+            <div class="panel panel-info">
+              <div class="panel-heading">
+                Round 3 (<span id="voten2"></span>)
+              </div>
+              <div class="panel-body">
+                <p><span id="2"></span></p>
+                <p><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></p>
+              </div>
+            </div>
           </div>
-          <div class="well well-sm col-lg-2">
-            <p>Round 4 (<span id="voten3"></span>)</p>
-            <p><span id="3"></span></p>
-            <p><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></p>
+          <div class="col-lg-2 col-md-3">
+            <div class="panel panel-info">
+              <div class="panel-heading">
+                Round 4 (<span id="voten3"></span>)
+              </div>
+              <div class="panel-body">
+                <p><span id="3"></span></p>
+                <p><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></p>
+              </div>
+            </div>
           </div>
-          <div class="well well-sm col-lg-2">
-            <p>Round 5 (<span id="voten4"></span>)</p>
-            <p><span id="4"></span></p>
-            <p><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></p>
+          <div class="col-lg-2 col-md-3">
+            <div class="panel panel-info">
+              <div class="panel-heading">
+                Round 5 (<span id="voten4"></span>)
+              </div>
+              <div class="panel-body">
+                <p><span id="4"></span></p>
+                <p><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
     </div>
 	</body>
 </html>
