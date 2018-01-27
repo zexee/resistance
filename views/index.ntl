@@ -30,15 +30,15 @@
             var result = 1;
             for (var j in data[i].votes) {
               var vote = data[i].votes[j];
-              if (vote == 1) html += '<span class="label label-success">Pass</span>';
-              else html += '<span class="label label-danger">Fail</span>';
+              if (vote == 1) html += ' <span class="label label-success">Pass</span>';
+              else html += ' <span class="label label-danger">Fail</span>';
               if (vote == 0) --result;
             }
             if (playern >= 7 && i == 3) {
               if (result == 0) result = 1;
             }
-            if (result == 1) html = 'Passed ' + html;
-            else html = 'Failed ' + html;
+            if (result == 1) html = '<span class="text-success">Passed</span> ' + html;
+            else html = '<span class="text-danger">Failed</span> ' + html;
             $('#' + i).html(html);
           } else {
             $('#' + i).html(data[i].voten);
