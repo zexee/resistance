@@ -222,7 +222,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Round 1 (<span id="voten0"></span>)
+                Mission 1 (<span id="voten0"></span>)
               </div>
               <div class="panel-body">
                 <p><span id="0"></span></p>
@@ -233,7 +233,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Round 2 (<span id="voten1"></span>)
+                Mission 2 (<span id="voten1"></span>)
               </div>
               <div class="panel-body">
                 <p><span id="1"></span></p>
@@ -244,7 +244,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Round 3 (<span id="voten2"></span>)
+                Mission 3 (<span id="voten2"></span>)
               </div>
               <div class="panel-body">
                 <p><span id="2"></span></p>
@@ -255,7 +255,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Round 4 (<span id="voten3"></span>)
+                Mission 4 (<span id="voten3"></span>)
               </div>
               <div class="panel-body">
                 <p><span id="3"></span></p>
@@ -266,7 +266,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Round 5 (<span id="voten4"></span>)
+                Mission 5 (<span id="voten4"></span>)
               </div>
               <div class="panel-body">
                 <p><span id="4"></span></p>
