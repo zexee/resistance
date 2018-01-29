@@ -34,6 +34,7 @@ app.post('/setname', function (req, res) {
 app.use(express.static(__dirname + '/public'));
 
 var votes = [[], [], [], [], []];
+var voters = [[], [], [], [], []];
 var param = {
   5: [2, 3, 2, 3, 3, 2],
   6: [2, 3, 4, 3, 4, 2],
@@ -70,9 +71,9 @@ function send_votes(socket) {
   var data = {'n': n, param: param[n]};
   for (var i in votes) {
     if (votes[i].length == param[n][i]) {
-      data[i] = {'votes':votes[i]};
+      data[i] = {'votes': votes[i], 'voters': voters[i]};
     } else {
-      data[i] = {'voten':votes[i].length};
+      data[i] = {'voten': votes[i].length};
     }
     data[i]['n'] = param[n][i];
   }
@@ -108,6 +109,7 @@ io.on('connect', function(socket) {
     if (n < 5 || n > 10) return;
     console.log('start', n);
     votes = [[], [], [], [], []];
+    voters = [[], [], [], [], []];
     proposals = [];
     current_proposals = {};
     send_votes(io.sockets);
@@ -137,10 +139,12 @@ io.on('connect', function(socket) {
     console.log('vote', data);
     if (socket.voted[data.round] == undefined) {
       votes[data.round].push(data.vote);
+      voters[data.round].push(socket.name);
       socket.voted[data.round] = data.vote;
     }
     if (votes[data.round].length == param[n][data.round]) {
 			votes[data.round] = shuffle(votes[data.round]);
+			voters[data.round] = shuffle(voters[data.round]);
     }
     send_votes(io.sockets);
   });

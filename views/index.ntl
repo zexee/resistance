@@ -47,6 +47,7 @@
               $('#' + i).parent().parent().addClass('bg-danger');
             }
             $('#' + i).html(html);
+            $('#voters' + i).html(unescape(data[i].voters.join(', ')));
           } else {
             $('#' + i).html(data[i].voten);
           }
@@ -225,8 +226,9 @@
                 Mission 1 (<span id="voten0"></span>)
               </div>
               <div class="panel-body">
-                <p><span id="0"></span></p>
-                <p><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></p>
+                <p>Votes: <span id="0"></span></p>
+                <p>Team: <span class="text-primary" id="voters0"></span></p>
+                <div><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></div>
               </div>
             </div>
           </div>
@@ -236,8 +238,9 @@
                 Mission 2 (<span id="voten1"></span>)
               </div>
               <div class="panel-body">
-                <p><span id="1"></span></p>
-                <p><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></p>
+                <p>Votes: <span id="1"></span></p>
+                <p>Team: <span class="text-primary" id="voters1"></span></p>
+                <div><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></div>
               </div>
             </div>
           </div>
@@ -247,8 +250,9 @@
                 Mission 3 (<span id="voten2"></span>)
               </div>
               <div class="panel-body">
-                <p><span id="2"></span></p>
-                <p><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></p>
+                <p>Votes: <span id="2"></span></p>
+                <p>Team: <span class="text-primary" id="voters2"></span></p>
+                <div><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></div>
               </div>
             </div>
           </div>
@@ -258,8 +262,9 @@
                 Mission 4 (<span id="voten3"></span>)
               </div>
               <div class="panel-body">
-                <p><span id="3"></span></p>
-                <p><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></p>
+                <p>Votes: <span id="3"></span></p>
+                <p>Team: <span class="text-primary" id="voters3"></span></p>
+                <div><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></div>
               </div>
             </div>
           </div>
@@ -269,8 +274,9 @@
                 Mission 5 (<span id="voten4"></span>)
               </div>
               <div class="panel-body">
-                <p><span id="4"></span></p>
-                <p><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></p>
+                <p>Votes: <span id="4"></span></p>
+                <p>Team: <span class="text-primary" id="voters4"></span></p>
+                <div><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></div>
               </div>
             </div>
           </div>
