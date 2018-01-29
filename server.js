@@ -23,7 +23,7 @@ app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 }));
 
 app.get('/', function (req, res) {
-  res.render('index', { name: req.cookies.name ? req.cookies.name : 'Harry Potter' })
+  res.render('index', { name: req.cookies.name ? '"' + req.cookies.name + '"': null })
 })
 
 app.post('/setname', function (req, res) {

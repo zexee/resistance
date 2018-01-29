@@ -37,8 +37,15 @@
             if (playern >= 7 && i == 3) {
               if (result == 0) result = 1;
             }
-            if (result == 1) html = '<span class="text-success">Passed</span> ' + html;
-            else html = '<span class="text-danger">Failed</span> ' + html;
+            if (result == 1) {
+              $('#' + i).parent().parent().parent().removeClass('panel-info');
+              $('#' + i).parent().parent().parent().addClass('panel-success');
+              $('#' + i).parent().parent().addClass('bg-success');
+            } else {
+              $('#' + i).parent().parent().parent().removeClass('panel-info');
+              $('#' + i).parent().parent().parent().addClass('panel-danger');
+              $('#' + i).parent().parent().addClass('bg-danger');
+            }
             $('#' + i).html(html);
           } else {
             $('#' + i).html(data[i].voten);
@@ -103,14 +110,23 @@
         }
         $('#name_checks').html(html);
       }
-      var me = null;
+      var me = #name#;
       var socket = null;
-      function Connect() {
-        me = prompt("Please enter your name", "#name#");
+      function ChangeName() {
+        me = prompt("Please enter your name", me == null ? "Harry Potter" : me);
         if (me == null) me = 'UNKNOWN';
         $.post('/setname', {name: me}, function(data) {
           console.log(data);
         });
+        $('#me').html(me);
+        if (socket != null) {
+          socket.emit('me', {'name': escape(me)});
+        }
+      }
+      function Connect() {
+        if (me == null) {
+          ChangeName();
+        }
         $('#me').html(me);
         socket = io();
         socket.on('connect', function(data) {
@@ -175,7 +191,7 @@
     <nav class="navbar navbar-default">
       <div class="container-fluid">
         <div class="navbar-header">
-          <a class="navbar-brand">Resistance <span style="font-weight:bolder;" id="me"></span></a>
+          <a class="navbar-brand" onclick="ChangeName()">Resistance <span style="font-weight:bolder;" id="me"></span></a>
         </div>
         <ul class="nav navbar-nav">
           <li><button class="btn navbar-btn btn-info" onclick="Start();">Start</button></li>
