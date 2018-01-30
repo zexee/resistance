@@ -180,6 +180,9 @@
       function Fail(round) {
         socket.emit('vote', {round: round, vote: 0});
       }
+      function ClearVote(round) {
+        socket.emit('clearvote', {round: round});
+      }
       function Yes() {
         socket.emit('yes');
       }
@@ -228,7 +231,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="0"></span></p>
                 <p>Team: <span class="text-primary" id="voters0"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button></div>
+                <div><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(0)">Clear</button></div>
               </div>
             </div>
           </div>
@@ -240,7 +243,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="1"></span></p>
                 <p>Team: <span class="text-primary" id="voters1"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button></div>
+                <div><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(1)">Clear</button></div>
               </div>
             </div>
           </div>
@@ -252,7 +255,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="2"></span></p>
                 <p>Team: <span class="text-primary" id="voters2"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button></div>
+                <div><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(2)">Clear</button></div>
               </div>
             </div>
           </div>
@@ -264,7 +267,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="3"></span></p>
                 <p>Team: <span class="text-primary" id="voters3"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button></div>
+                <div><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(3)">Clear</button></div>
               </div>
             </div>
           </div>
@@ -276,7 +279,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="4"></span></p>
                 <p>Team: <span class="text-primary" id="voters4"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button></div>
+                <div><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(4)">Clear</button></div>
               </div>
             </div>
           </div>

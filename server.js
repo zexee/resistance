@@ -148,6 +148,17 @@ io.on('connect', function(socket) {
     }
     send_votes(io.sockets);
   });
+  socket.on('clearvote', function(data) {
+    if (n < 5 || n > 10) return;
+    if (votes[data.round].length == param[n][data.round]) return;
+    console.log('clearvote', data);
+    votes[data.round] = [];
+    voters[data.round] = [];
+    for (var s in io.sockets.sockets) {
+      delete io.sockets.sockets[s].voted[data.round];
+    }
+    send_votes(io.sockets);
+  });
   socket.on('propose', function(data) {
     current_proposal = {'text': data.text, 'who': socket.name};
     send_votes(io.sockets);
