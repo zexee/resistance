@@ -28,7 +28,7 @@ app.get('/', function (req, res) {
 
 app.post('/setname', function (req, res) {
   var name = req.body.name;
-  res.cookie('name', name);
+  res.cookie('name', name, {maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true});
   res.json({ok:1});
 })
 app.use(express.static(__dirname + '/public'));
