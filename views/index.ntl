@@ -50,6 +50,12 @@
             $('#voters' + i).html(unescape(data[i].voters.join(', ')));
           } else {
             $('#' + i).html(data[i].voten);
+            $('#voters' + i).html('');
+            $('#' + i).parent().parent().parent().removeClass('panel-success');
+            $('#' + i).parent().parent().parent().removeClass('panel-danger');
+            $('#' + i).parent().parent().parent().addClass('panel-info');
+            $('#' + i).parent().parent().removeClass('bg-success');
+            $('#' + i).parent().parent().removeClass('bg-danger');
           }
           $('#voten' + i).html(data[i].n);
           if (i == 3 && playern >= 7) {
