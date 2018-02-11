@@ -23,6 +23,7 @@
         if (data[0] == undefined) return;
         playern = data.n;
         $('#playern').html(data.n);
+        $('#room').html(data.room);
         $('#spyn').html(data.param[5]);
         for (var i = 0; i < 5; ++i) {
           if (data[i].votes != undefined) {
@@ -108,6 +109,8 @@
         socket.emit('propose', {text: text.join(', ')});
       }
       function Join(data) {
+        $('#room').html(data.room);
+        room = data.room;
         $('#joined').html(data.names.length);
         $('#names').html(unescape(data.names.join(' | ')));
         var html = '';
@@ -118,10 +121,11 @@
         $('#name_checks').html(html);
       }
       var me = #name#;
+      var room = #room#;
       var socket = null;
       function ChangeName() {
         me = prompt("Please enter your name", me == null ? "Harry Potter" : me);
-        if (me == null) me = 'UNKNOWN';
+        if (me == null) return;
         $.post('/setname', {name: me}, function(data) {
           console.log(data);
         });
@@ -138,7 +142,7 @@
         socket = io();
         socket.on('connect', function(data) {
           $('#WARNING').html('CONNECTED');
-          socket.emit('me', {'name': escape(me)});
+          socket.emit('me', {'name': escape(me), 'room': room});
         });
         socket.on('disconnect', function(data) {
           $('#WARNING').html('DISCONNECTED');
@@ -148,6 +152,9 @@
         });
         socket.on('join', function(data) {
           Join(data);
+          $.post('/setname', {name: me, room: room}, function(data) {
+            console.log(data);
+          });
         });
         socket.on('role', function(data) {
           if (data.role == 0) {
@@ -195,22 +202,40 @@
       function No() {
         socket.emit('no');
       }
+      function CreateRoom() {
+        socket.emit('create');
+      }
+      function JoinRoom() {
+        var room2 = prompt("Please enter room number");
+        if (room2 == null) return;
+        if (socket != null) {
+          socket.emit('join', {'room': room2});
+        }
+      }
+      function LeaveRoom() {
+        socket.emit('leave');
+      }
 		</script>
 	</head>
 	<body>
     <nav class="navbar navbar-default">
       <div class="container-fluid">
         <div class="navbar-header">
-          <a class="navbar-brand" onclick="ChangeName()">Resistance <span style="font-weight:bolder;" id="me"></span></a>
+          <a class="navbar-brand" onclick="ChangeName()">Resistance <span style="font-weight:bolder;" id="me"></span> [<span style="font-weight:bolder;" id="room"></span>]</a>
         </div>
         <ul class="nav navbar-nav">
-          <li><button class="btn navbar-btn btn-info" onclick="Start();">Start</button></li>
+          <li>
+            <button class="btn navbar-btn btn-info" onclick="CreateRoom();">Create Room</button>
+            <button class="btn navbar-btn btn-info" onclick="JoinRoom();">Join Room</button>
+            <button class="btn navbar-btn btn-info" onclick="LeaveRoom();">Leave Room</button>
+            <button class="btn navbar-btn btn-info" onclick="Start();">Start</button>
+          </li>
           <li><a><span id="WARNING"><span class="text-success">CONNECTED</span></span></a></li>
         </ul>
       </div>
     </nav>
     <div class="container-fluid">
-        <h2>In Room (<span style="font-weight:bolder;" id="joined"></span>) <span class="text-primary" id="names"></span></h2>
+        <h2>In Room (<span style="font-weight:bolder;" id="joined"></span>): <span class="text-primary" id="names"></span></h2>
         <div class="row">
           <div class="col-lg-4 col-md-6">
             <div class="panel panel-primary">
