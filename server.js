@@ -224,25 +224,26 @@ io.on('connect', function(socket) {
   socket.on('me', function(data) {
     socket.name = data.name;
     var room = JoinRoom(socket, data.room);
-    if (room.id != 'Lobby') {
-      send_votes(room);
-    }
+    if (room.id != 'Lobby') send_votes(room, socket);
   });
   socket.on('join', function(data) {
     if (data.room == socket.myroom) return;
     LeaveRoom(socket);
-    JoinRoom(socket, data.room);
+    var room = JoinRoom(socket, data.room);
+    if (room.id != 'Lobby') send_votes(room, socket);
   });
   socket.on('create', function(data) {
     var room_id = CreateRoom();
     if (room_id == null) return;
     LeaveRoom(socket);
-    JoinRoom(socket, room_id);
+    var room = JoinRoom(socket, room_id);
+    if (room.id != 'Lobby') send_votes(room, socket);
   });
   socket.on('leave', function(data) {
     if (socket.myroom == 'Lobby') return;
     LeaveRoom(socket);
-    JoinRoom(socket, 'Lobby');
+    var room = JoinRoom(socket, 'Lobby');
+    if (room.id != 'Lobby') send_votes(room, socket);
   });
   socket.on('start', function(data) {
     var room = GetRoom(socket);
