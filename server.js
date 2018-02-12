@@ -59,17 +59,21 @@ function CreateRoom() {
   var ROOM_ID_LEN = 4;
   var ROOM_ID_PICK = "0123456789";
   var room_id = '';
+  var i = 0;
   do {
     room_id = '';
     for (var i = 0; i < ROOM_ID_LEN; ++i) {
       room_id += ROOM_ID_PICK[Math.floor(Math.random() * ROOM_ID_PICK.length)];
     }
+    ++i;
+    if (i > 10) return null;
   } while (rooms[room_id] != undefined);
   rooms[room_id] = {
     id: room_id,
     sockets: {}
   };
   RoomStart(rooms[room_id], 0);
+  console.log('NEWROOM', room_id);
   return room_id;
 }
 
@@ -81,7 +85,7 @@ function RoomStart(room, n) {
   room.current_proposal = {};
 }
 
-function shuffle(a) {
+function Shuffle(a) {
 	for (var i = a.length - 1; i > 0; --i) {
     var r = Math.random();
 		var j = Math.floor(r * (i + 1));
@@ -92,7 +96,7 @@ function shuffle(a) {
 	return a;
 }
 
-function objlength(obj) {
+function ObjLength(obj) {
   var n = 0;
   for (var i in obj) {
     ++n;
@@ -100,7 +104,7 @@ function objlength(obj) {
   return n;
 }
 
-function send_votes(room) {
+function send_votes(room, socket) {
   if (room.n < 5 || room.n > 10) return;
   var data = {
     room: room.id,
@@ -124,9 +128,12 @@ function send_votes(room) {
     }
   }
   data.proposal = current;
-  console.log('SEND', data);
-  for (var s in room.sockets) {
-    room.sockets[s].emit('votes', data);
+  if (socket != undefined) {
+    socket.emit('votes', data);
+  } else {
+    for (var s in room.sockets) {
+      room.sockets[s].emit('votes', data);
+    }
   }
 }
 
@@ -146,6 +153,7 @@ function JoinRoom(socket, room_id) {
   room.sockets[socket.id] = socket;
   socket.myroom = room_id;
   console.log('JOIN', socket.id, socket.myroom);
+  SendJoin(socket);
   return room;
 }
 
@@ -155,10 +163,45 @@ function LeaveRoom(socket) {
     console.log('LEAVE', socket.id, room.id);
     socket.leave(socket.myroom);
     delete room.sockets[socket.id];
+    if (ObjLength(room.sockets) == 0) {
+      if (room.n == 0) {
+        // No game and no user, delete the room.
+        console.log('DELROOM', socket.myroom);
+        delete rooms[socket.myroom];
+      } else {
+        // There is a game, keep the room for a time.
+        room.last_time = new Date();
+        console.log('EMPTYROOM', room.last_time);
+      }
+    }
+    SendJoin(socket);
+    socket.myroom = null;
   }
 }
 
-function send_room(socket) {
+var EMPTY_ROOM_EXPIRY = 1000 * 60 * 60 * 5;  // 5 hours
+var CHECK_INTERVAL = 1000 * 60 * 30;  // 30 minute
+function DeleteEmptyRooms() {
+  console.log('DLETEEMPTYROOM');
+  var room_list = [];
+  for (var r in rooms) {
+    if (r == 'Lobby') continue;
+    room_list.push(r);
+  }
+  var now = new Date();
+  for (var i in room_list) {
+    var room = rooms[room_list[i]];
+    if (ObjLength(room.sockets) != 0) continue;
+    if (now - room.last_time > EMPTY_ROOM_EXPIRY) {
+      console.log('DELROOM', room_list[i]);
+      delete rooms[room_list[i]];
+    }
+  }
+}
+
+setInterval(DeleteEmptyRooms, CHECK_INTERVAL);
+
+function SendJoin(socket) {
   var names = [];
   var room = GetRoom(socket);
   for (var i in room.sockets) {
@@ -180,28 +223,31 @@ io.on('connect', function(socket) {
 
   socket.on('me', function(data) {
     socket.name = data.name;
-    JoinRoom(socket, data.room);
-    send_room(socket);
+    var room = JoinRoom(socket, data.room);
+    if (room.id != 'Lobby') {
+      send_votes(room);
+    }
   });
   socket.on('join', function(data) {
+    if (data.room == socket.myroom) return;
     LeaveRoom(socket);
     JoinRoom(socket, data.room);
-    send_room(socket);
   });
   socket.on('create', function(data) {
+    var room_id = CreateRoom();
+    if (room_id == null) return;
     LeaveRoom(socket);
-    JoinRoom(socket, CreateRoom());
-    send_room(socket);
+    JoinRoom(socket, room_id);
   });
   socket.on('leave', function(data) {
+    if (socket.myroom == 'Lobby') return;
     LeaveRoom(socket);
     JoinRoom(socket, 'Lobby');
-    send_room(socket);
   });
   socket.on('start', function(data) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
-    n = objlength(room.sockets);
+    n = ObjLength(room.sockets);
     if (n < 5 || n > 10) return;
     console.log('start', n);
     RoomStart(room, n);
@@ -209,7 +255,7 @@ io.on('connect', function(socket) {
     var roles = [];
     for (var i = 0; i < param[n][5]; ++i) roles.push(0);
     while (roles.length < n) roles.push(1);
-    roles = shuffle(roles);
+    roles = Shuffle(roles);
     var spys = [];
     var i = 0;
     for (var s in room.sockets) {
@@ -228,7 +274,6 @@ io.on('connect', function(socket) {
   });
   socket.on('vote', function(data) {
     var room = GetRoom(socket);
-    console.log('VOTE', room);
     if (room.id == 'Lobby') return;
     if (room.n < 5 || room.n > 10) return;
     if (room.votes[data.round].length == param[room.n][data.round]) return;
@@ -239,8 +284,8 @@ io.on('connect', function(socket) {
       socket.voted[data.round] = data.vote;
     }
     if (room.votes[data.round].length == param[n][data.round]) {
-			room.votes[data.round] = shuffle(room.votes[data.round]);
-			room.voters[data.round] = shuffle(room.voters[data.round]);
+			room.votes[data.round] = Shuffle(room.votes[data.round]);
+			room.voters[data.round] = Shuffle(room.voters[data.round]);
     }
     send_votes(room);
   });
@@ -267,7 +312,7 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     room.current_proposal[socket.name] = 1;
-    if (objlength(room.current_proposal) == n + 2) {
+    if (ObjLength(room.current_proposal) == n + 2) {
       room.proposals.push(room.current_proposal);
       room.current_proposal = {};
     }
@@ -277,7 +322,7 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     room.current_proposal[socket.name] = -1;
-    if (objlength(room.current_proposal) == n + 2) {
+    if (ObjLength(room.current_proposal) == n + 2) {
       room.proposals.push(room.current_proposal);
       room.current_proposal = {};
     }

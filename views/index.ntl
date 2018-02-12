@@ -221,36 +221,40 @@
     <nav class="navbar navbar-default">
       <div class="container-fluid">
         <div class="navbar-header">
-          <a class="navbar-brand" onclick="ChangeName()">Resistance <span style="font-weight:bolder;" id="me"></span> [<span style="font-weight:bolder;" id="room"></span>]</a>
+          <a class="navbar-brand" href="#"><i class="fa fa-rebel"></i> Resistance</a>
         </div>
-        <ul class="nav navbar-nav">
-          <li>
-            <button class="btn navbar-btn btn-info" onclick="CreateRoom();">Create Room</button>
-            <button class="btn navbar-btn btn-info" onclick="JoinRoom();">Join Room</button>
-            <button class="btn navbar-btn btn-info" onclick="LeaveRoom();">Leave Room</button>
-            <button class="btn navbar-btn btn-info" onclick="Start();">Start</button>
-          </li>
-          <li><a><span id="WARNING"><span class="text-success">CONNECTED</span></span></a></li>
-        </ul>
+				<p class="navbar-text">
+					<a class="navbar-link" onclick="ChangeName()">
+            <span style="font-weight:bolder;" id="me"></span>
+          </a>
+          <span class="label label-primary"><i class="fa fa-home"></i> <span id="room"></span></span>
+          <span id="WARNING"><span class="text-success">CONNECTED</span>
+        </p>
+        <div class="navbar-collapse" id="navbar_collapse">
+          <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
+          <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
+          <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> Leave</button>
+          <button class="btn navbar-btn btn-danger" onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button>
+        </div>
       </div>
     </nav>
     <div class="container-fluid">
-        <h2>In Room (<span style="font-weight:bolder;" id="joined"></span>): <span class="text-primary" id="names"></span></h2>
+        <h2><i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span class="text-primary" id="names"></span></h2>
         <div class="row">
           <div class="col-lg-4 col-md-6">
             <div class="panel panel-primary">
               <div class="panel-heading">
-                Players number <span id="playern"></span>, Spys number <span id="spyn"></span>
+                <i class="fa fa-users"></i> Players number: <span id="playern"></span>, <i class="fa fa-user-secret"></i> Spies number: <span id="spyn"></span>
               </div>
               <div class="panel-body">
                 <ul class="list-group" id="proposals"></ul>
                 <div class="well well-sm">
                   <div id="name_checks"></div>
-                  <button class="btn btn-primary" onclick="Propose()">Propose</button>
+                  <button class="btn btn-primary" onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
                 </div>
                 <div class="well well-sm" id="proposal"></div>
-                <button class="btn btn-success" onclick="Yes()">Yes</button>
-                <button class="btn btn-danger" onclick="No()">No</button>
+                <button class="btn btn-success" onclick="Yes()"><i class="fa fa-thumbs-up"></i> Yes</button>
+                <button class="btn btn-danger" onclick="No()"><i class="fa fa-thumbs-down"></i> No</button>
               </div>
             </div>
           </div>
@@ -262,7 +266,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="0"></span></p>
                 <p>Team: <span class="text-primary" id="voters0"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(0)">Pass</button> <button class="btn btn-danger" onclick="Fail(0)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(0)">Clear</button></div>
+                <div><button class="btn btn-success" onclick="Pass(0)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(0)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(0)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
@@ -274,7 +278,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="1"></span></p>
                 <p>Team: <span class="text-primary" id="voters1"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(1)">Pass</button> <button class="btn btn-danger" onclick="Fail(1)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(1)">Clear</button></div>
+                <div><button class="btn btn-success" onclick="Pass(1)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(1)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(1)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
@@ -286,7 +290,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="2"></span></p>
                 <p>Team: <span class="text-primary" id="voters2"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(2)">Pass</button> <button class="btn btn-danger" onclick="Fail(2)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(2)">Clear</button></div>
+                <div><button class="btn btn-success" onclick="Pass(2)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(2)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(2)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
@@ -298,7 +302,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="3"></span></p>
                 <p>Team: <span class="text-primary" id="voters3"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(3)">Pass</button> <button class="btn btn-danger" onclick="Fail(3)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(3)">Clear</button></div>
+                <div><button class="btn btn-success" onclick="Pass(3)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(3)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(3)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
@@ -310,7 +314,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="4"></span></p>
                 <p>Team: <span class="text-primary" id="voters4"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(4)">Pass</button> <button class="btn btn-danger" onclick="Fail(4)">Fail</button> <button class="btn btn-primary" onclick="ClearVote(4)">Clear</button></div>
+                <div><button class="btn btn-success" onclick="Pass(4)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(4)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(4)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
