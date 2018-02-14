@@ -24,6 +24,13 @@
         playern = data.n;
         $('#playern').html(data.n);
         $('#room').html(data.room);
+        if (data.room == 'Lobby') {
+          $('#gamepad').hide();
+          $('#gameinstruction').show();
+        } else {
+          $('#gamepad').show();
+          $('#gameinstruction').hide();
+        }
         $('#spyn').html(data.param[5]);
         for (var i = 0; i < 5; ++i) {
           if (data[i].votes != undefined) {
@@ -111,8 +118,18 @@
       function Join(data) {
         $('#room').html(data.room);
         room = data.room;
+        if (data.room == 'Lobby') {
+          $('#gamepad').hide();
+          $('#gameinstruction').show();
+        } else {
+          $('#gamepad').show();
+          $('#gameinstruction').hide();
+        }
         $('#joined').html(data.names.length);
-        $('#names').html(unescape(data.names.join(' | ')));
+        var nameshtml = [];
+        for (var i in data.names)
+          nameshtml.push('<strong class="text-primary">' + unescape(data.names[i]) + '</strong>');
+        $('#names').html(nameshtml.join(' | '));
         var html = '';
         for (var i in data.names) {
           var name = data.names[i];
@@ -239,7 +256,8 @@
       </div>
     </nav>
     <div class="container-fluid">
-        <h2><i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span class="text-primary" id="names"></span></h2>
+      <h2><i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span></h2>
+      <div id="gamepad">
         <div class="row">
           <div class="col-lg-4 col-md-6">
             <div class="panel panel-primary">
@@ -319,6 +337,19 @@
             </div>
           </div>
         </div>
+      </div>
+      <div class="well" id="gameinstruction">
+        <h4>You are in the
+          <span class="label label-primary"><i class="fa fa-home"></i> <span>Lobby</span></span>
+          .
+        </h4>
+        <h4>Please 
+          <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
+          or
+          <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
+          a room.
+        </h4>
+      </div>
     </div>
 	</body>
 </html>
