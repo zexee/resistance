@@ -19,9 +19,16 @@
 
 		<script type="text/javascript">
       var playern = 0;
+      var teamSize = 0;
+      var proposeRound = -1;
       function Fill(data) {
         if (data[0] == undefined) return;
         playern = data.n;
+        if (proposeRound != data.current_round) {
+          $('#name_checks input[type=checkbox]').prop('checked', false);
+        }
+        proposeRound = data.current_round;
+        teamSize = proposeRound >= 0 ? data[proposeRound].n : 0;
         $('#playern').html(data.n);
         $('#room').html(data.room);
         if (data.room == 'Lobby') {
@@ -77,7 +84,7 @@
           var yes = 0;
           var all = 0;
           for (var j in p) {
-            if (j == 'who' || j == 'text') continue;
+            if (j == 'who' || j == 'text' || j == 'round') continue;
             ++all;
             if (p[j] == 1) {
               votes.push(' <span class="label label-success">' + unescape(j) + '</span>');
@@ -91,29 +98,53 @@
           } else {
             html += '<li class="list-group-item list-group-item-danger">';
           }
-          html += unescape(p.who) + ': ' + unescape(p.text) + '<p>' + votes.join('') + '</p></li>';
+          html += 'Mission ' + (p.round + 1) + ' - ' + unescape(p.who) + ': ' + unescape(p.text) + '<p>' + votes.join('') + '</p></li>';
         }
         $('#proposals').html(html);
         
         html = '';
         if (data.proposal['text'] != undefined) {
           var p = data.proposal;
-          html += '<h3><span style="font-weight:bold">' + unescape(p.who) + '</span>: <span class="text-primary">' + unescape(p.text) + '</span></h3>'
+          html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + unescape(p.who) + '</span>: <span class="text-primary">' + unescape(p.text) + '</span></h3>'
           var votes = [];
           for (var j in p) {
-            if (j == 'who' || j == 'text') continue;
+            if (j == 'who' || j == 'text' || j == 'round') continue;
             votes.push('<span class="label label-warning">' + unescape(j) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
         }
         $('#proposal').html(html);
+        UpdateTeamLimit();
+        UpdateMissionControls();
+      }
+      function UpdateMissionControls() {
+        for (var i = 0; i < 5; ++i) {
+          var current = i == proposeRound;
+          $('#nextbadge' + i).toggle(current);
+          $('button[onclick="Pass(' + i + ')"]').prop('disabled', !current);
+          $('button[onclick="Fail(' + i + ')"]').prop('disabled', !current);
+          $('button[onclick="ClearVote(' + i + ')"]').prop('disabled', !current);
+        }
+      }
+      function UpdateTeamLimit() {
+        var boxes = $('#name_checks input[type=checkbox]');
+        var checked = boxes.filter(':checked').length;
+        boxes.each(function () {
+          this.disabled = !this.checked && checked >= teamSize;
+        });
+        $('#proposebtn').prop('disabled', !(teamSize > 0 && checked == teamSize));
+        if (proposeRound >= 0) {
+          $('#teamhint').html('Next mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' player(s) (' + checked + '/' + teamSize + ')');
+        } else {
+          $('#teamhint').html('No mission to propose');
+        }
       }
       function Propose() {
-        var text = [];
-        $('input[type=checkbox]').each(function () {
-          if (this.checked) text.push(this.value);
+        var team = [];
+        $('#name_checks input[type=checkbox]').each(function () {
+          if (this.checked) team.push(this.value);
         });
-        socket.emit('propose', {text: text.join(', ')});
+        socket.emit('propose', {team: team});
       }
       function Join(data) {
         $('#room').html(data.room);
@@ -136,6 +167,7 @@
           html += '<div class="checkbox"><label><input type="checkbox" value="' + name + '">' + unescape(name) + '</label></div>';
         }
         $('#name_checks').html(html);
+        UpdateTeamLimit();
       }
       var me = #name#;
       var room = #room#;
@@ -200,6 +232,7 @@
           }
         });
       }
+      $(document).on('change', '#name_checks input[type=checkbox]', UpdateTeamLimit);
       $(document).ready(Connect);
       function Start() {
         socket.emit('start');
@@ -268,7 +301,8 @@
                 <ul class="list-group" id="proposals"></ul>
                 <div class="well well-sm">
                   <div id="name_checks"></div>
-                  <button class="btn btn-primary" onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
+                  <p id="teamhint" class="text-muted"></p>
+                  <button class="btn btn-primary" id="proposebtn" onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
                 </div>
                 <div class="well well-sm" id="proposal"></div>
                 <button class="btn btn-success" onclick="Yes()"><i class="fa fa-thumbs-up"></i> Yes</button>
@@ -279,7 +313,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 1 (<span id="voten0"></span>)
+                Mission 1 (<span id="voten0"></span>) <span class="label label-warning" id="nextbadge0" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="0"></span></p>
@@ -291,7 +325,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 2 (<span id="voten1"></span>)
+                Mission 2 (<span id="voten1"></span>) <span class="label label-warning" id="nextbadge1" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="1"></span></p>
@@ -303,7 +337,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 3 (<span id="voten2"></span>)
+                Mission 3 (<span id="voten2"></span>) <span class="label label-warning" id="nextbadge2" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="2"></span></p>
@@ -315,7 +349,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 4 (<span id="voten3"></span>)
+                Mission 4 (<span id="voten3"></span>) <span class="label label-warning" id="nextbadge3" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="3"></span></p>
@@ -327,7 +361,7 @@
           <div class="col-lg-2 col-md-3">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 5 (<span id="voten4"></span>)
+                Mission 5 (<span id="voten4"></span>) <span class="label label-warning" id="nextbadge4" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="4"></span></p>

@@ -85,6 +85,14 @@ function RoomStart(room, n) {
   room.current_proposal = {};
 }
 
+function CurrentRound(room) {
+  // The current mission is the first one without a complete vote result.
+  for (var i = 0; i < 5; ++i) {
+    if (room.votes[i].length < param[room.n][i]) return i;
+  }
+  return -1;
+}
+
 function Shuffle(a) {
 	for (var i = a.length - 1; i > 0; --i) {
     var r = Math.random();
@@ -110,7 +118,8 @@ function send_votes(room, socket) {
     room: room.id,
     n: room.n,
     param: param[room.n],
-    proposals: room.proposals
+    proposals: room.proposals,
+    current_round: CurrentRound(room)
   };
   for (var i in room.votes) {
     if (room.votes[i].length == param[room.n][i]) {
@@ -123,7 +132,7 @@ function send_votes(room, socket) {
   var current = {}
   if (room.current_proposal['text'] != undefined) {
     for (var k in room.current_proposal) {
-      if (k == 'text' || k == 'who') current[k] = room.current_proposal[k];
+      if (k == 'text' || k == 'who' || k == 'round') current[k] = room.current_proposal[k];
       else current[k] = '0';
     }
   }
@@ -214,7 +223,7 @@ function SendJoin(socket) {
 }
 
 io.on('connect', function(socket) {
-  console.log('New IO connection.', socket.request.connection.remoteAddress);
+  console.log('New IO connection.', socket.handshake.address);
   socket.voted = {};
 
   socket.on('disconnect', function() {
@@ -248,7 +257,7 @@ io.on('connect', function(socket) {
   socket.on('start', function(data) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
-    n = ObjLength(room.sockets);
+    var n = ObjLength(room.sockets);
     if (n < 5 || n > 10) return;
     console.log('start', n);
     RoomStart(room, n);
@@ -277,14 +286,14 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     if (room.n < 5 || room.n > 10) return;
-    if (room.votes[data.round].length == param[room.n][data.round]) return;
+    if (data.round != CurrentRound(room)) return;
     console.log('vote', data);
     if (socket.voted[data.round] == undefined) {
       room.votes[data.round].push(data.vote);
       room.voters[data.round].push(socket.name);
       socket.voted[data.round] = data.vote;
     }
-    if (room.votes[data.round].length == param[n][data.round]) {
+    if (room.votes[data.round].length == param[room.n][data.round]) {
 			room.votes[data.round] = Shuffle(room.votes[data.round]);
 			room.voters[data.round] = Shuffle(room.voters[data.round]);
     }
@@ -294,7 +303,7 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     if (room.n < 5 || room.n > 10) return;
-    if (room.votes[data.round].length == param[room.n][data.round]) return;
+    if (data.round != CurrentRound(room)) return;
     console.log('clearvote', data);
     room.votes[data.round] = [];
     room.voters[data.round] = [];
@@ -306,14 +315,28 @@ io.on('connect', function(socket) {
   socket.on('propose', function(data) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
-    room.current_proposal = {'text': data.text, 'who': socket.name};
+    if (room.n < 5 || room.n > 10) return;
+    var round = CurrentRound(room);
+    if (round < 0) return;
+    var team = data.team;
+    if (!Array.isArray(team) || team.length != param[room.n][round]) return;
+    var names = {};
+    for (var s in room.sockets) {
+      if (room.sockets[s].name != undefined) names[room.sockets[s].name] = 1;
+    }
+    var picked = {};
+    for (var i in team) {
+      if (picked[team[i]] != undefined || names[team[i]] == undefined) return;
+      picked[team[i]] = 1;
+    }
+    room.current_proposal = {'text': team.join(', '), 'who': socket.name, 'round': round};
     send_votes(room);
   });
   socket.on('yes', function(data) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     room.current_proposal[socket.name] = 1;
-    if (ObjLength(room.current_proposal) == n + 2) {
+    if (ObjLength(room.current_proposal) == room.n + 3) {
       room.proposals.push(room.current_proposal);
       room.current_proposal = {};
     }
@@ -323,7 +346,7 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     room.current_proposal[socket.name] = -1;
-    if (ObjLength(room.current_proposal) == n + 2) {
+    if (ObjLength(room.current_proposal) == room.n + 3) {
       room.proposals.push(room.current_proposal);
       room.current_proposal = {};
     }
