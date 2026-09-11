@@ -25,6 +25,8 @@ function connect(port, name, pid) {
     });
     s.on('votes', d => { state.lastVotes = d; state.lastPlayers = d.players; });
     s.on('role', d => { state.roles = d; });
+    s.on('chat', d => { if (!state.chats) state.chats = []; state.chats.push(d.message); });
+    s.on('chatlog', d => { state.chatlog = d; });
   });
 }
 
@@ -303,6 +305,41 @@ async function castMission(clients, failPids) {
   check(v(c).results[3] === 0, '7p mission 4 fails with two fails');
   check(v(c).winner === 'spies', '7p spies win after mission 4');
   c.forEach(x => x.s.close());
+  await wait(200);
+
+  // ---- chat ----
+  const chatA = await join(port, undefined, 'ChatA', 'pid-chatA');
+  const chatB = await join(port, undefined, 'ChatB', 'pid-chatB');
+  await wait(200);
+  chatA.s.emit('chat', {text: 'hello world'});
+  await wait(200);
+  check(chatB.chats && chatB.chats.length === 1, 'chat delivered to everyone in the room');
+  check(chatA.chats && chatA.chats.length === 1, 'chat delivered to the sender');
+  check(chatB.chats[0].text === 'hello world', 'chat text preserved');
+  check(chatB.chats[0].pid === 'pid-chatA', 'chat carries the sender pid');
+  check(chatB.chats[0].who === undefined, 'chat payload does not freeze the sender name');
+  check(typeof chatB.chats[0].time === 'number', 'chat carries a timestamp');
+  chatA.s.emit('chat', {text: '   '});
+  await wait(200);
+  check(chatB.chats.length === 1, 'blank chat ignored');
+  chatA.s.emit('chat', {text: 'X'.repeat(500)});
+  await wait(200);
+  check(chatB.chats[1].text.length === 200, 'long chat clamped to 200 chars');
+  const chatC = await join(port, undefined, 'ChatC', 'pid-chatC');
+  await wait(200);
+  check(chatC.chatlog && chatC.chatlog.room === 'Lobby', 'chat history identifies the room');
+  check(chatC.chatlog.messages.length === 2, 'chat history sent on join');
+  check(chatC.chatlog.messages[0].text === 'hello world', 'chat history keeps order');
+
+  const isolated = await makeGame(port, ['Iso1', 'Iso2'], false);
+  isolated[0].s.emit('chat', {text: 'room secret'});
+  await wait(200);
+  check(isolated[1].chats && isolated[1].chats.some(m => m.text === 'room secret'), 'room chat delivered inside the room');
+  check(!(chatB.chats || []).some(m => m.text === 'room secret'), 'room chat does not leak to the lobby');
+  isolated.forEach(x => x.s.close());
+  chatA.s.close();
+  chatB.s.close();
+  chatC.s.close();
   await wait(200);
 
   await stopServer(server);

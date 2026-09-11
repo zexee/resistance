@@ -10,7 +10,9 @@
     <link href="3rd/font-awesome.min.css" rel="stylesheet">
     <link href="3rd/bootstrap.min.css" rel="stylesheet">
     <link href="3rd/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="chat.css" rel="stylesheet">
     <script src="3rd/bootstrap.min.js"></script>
+    <script src="chat.js"></script>
     <style>
       .label {
         font-size:100%;
@@ -389,6 +391,7 @@
         }
         $('#me').html(HtmlEscape(me));
         socket = io();
+        InitChat(socket);
         socket.on('connect', function(data) {
           $('#WARNING').html('CONNECTED');
           socket.emit('me', {'name': encodeURIComponent(me), 'room': room, 'pid': pid});

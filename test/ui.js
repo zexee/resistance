@@ -119,6 +119,8 @@ async function castMission(pages, round, failNames) {
 
   const a = await makePage(browser, url, NAMES[0]);
   check(await a.$eval('#startbtn', el => el.offsetParent === null), 'start button hidden in lobby');
+  await a.waitForFunction(() => document.querySelector('#chatroom').textContent.includes('Lobby'));
+  check((await text(a, '#chatroom')).includes('Lobby'), 'chat title shows the lobby');
   check((await text(a, '#lobbyrules')).includes('strict majority'), 'lobby shows game rules');
   await a.click('button[data-target="#rules-modal"]');
   await a.waitForFunction(() => document.querySelector('#rules-modal').classList.contains('in'));
@@ -137,6 +139,43 @@ async function castMission(pages, round, failNames) {
   const pages = [a];
   for (let i = 1; i < 5; i++) pages.push(await makePage(browser, url, NAMES[i], room));
   await a.waitForFunction(() => document.querySelector('#joined').textContent === '5');
+
+  // chat
+  check(await a.$eval('#chatpanel', el => el.getBoundingClientRect().width > 0), 'chat panel visible in a room');
+  await a.waitForFunction(r => document.querySelector('#chatroom').textContent.includes(r), {}, room);
+  check((await text(a, '#chatroom')).includes(room), 'chat title shows the room name');
+  await a.type('#chatinput', 'hello everyone');
+  await a.click('#chatsend');
+  await pages[1].waitForFunction(() => document.querySelector('#chatlog').textContent.includes('hello everyone'));
+  check((await text(pages[1], '#chatlog')).includes('hello everyone'), 'chat message reaches other players');
+  check((await text(pages[1], '#chatlog')).includes(NAMES[0]), 'chat message shows the sender');
+  check((await text(pages[1], '#chatlog')).includes('1. ' + NAMES[0]), 'chat message shows the sender number');
+  await a.evaluate(() => socket.emit('me', {name: encodeURIComponent('Alice2'), room: room, pid: pid}));
+  await pages[1].waitForFunction(() => document.querySelector('#chatlog').textContent.includes('Alice2'));
+  check((await text(pages[1], '#chatlog')).includes('1. Alice2'), 'chat re-renders old messages after a name change');
+  await a.evaluate(() => socket.emit('me', {name: encodeURIComponent('Alice'), room: room, pid: pid}));
+  await pages[1].waitForFunction(() => !document.querySelector('#chatlog').textContent.includes('Alice2'));
+  await a.waitForFunction(() => !document.querySelector('#names').textContent.includes('Alice2'));
+  check((await text(pages[1], '#chatlog')).includes('1. Alice'), 'chat re-renders after renaming back');
+  await a.type('#chatinput', '<img src=x onerror=alert(1)>');
+  await a.keyboard.press('Enter');
+  await pages[1].waitForFunction(() => document.querySelector('#chatlog').textContent.includes('onerror'));
+  check(await pages[1].$eval('#chatlog', el => el.querySelector('img') === null), 'chat text is not rendered as HTML');
+  await a.click('#chattoggle');
+  check(await a.$eval('#chatpanel', el => el.classList.contains('collapsed')), 'chat panel collapses');
+  await pages[1].type('#chatinput', 'unread test');
+  await pages[1].click('#chatsend');
+  await a.waitForFunction(() => document.querySelector('#chatunread').offsetParent !== null && document.querySelector('#chatunread').textContent === '1');
+  check((await text(a, '#chatunread')) === '1', 'collapsed chat shows unread count');
+  await a.click('#chattoggle');
+  check(!(await a.$eval('#chatpanel', el => el.classList.contains('collapsed'))), 'chat panel expands');
+  check(await a.$eval('#chatunread', el => el.offsetParent === null), 'unread badge cleared on expand');
+  await pages[2].reload({ waitUntil: 'domcontentloaded' });
+  await pages[2].waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
+  await pages[2].waitForFunction(() => document.querySelector('#chatlog').textContent.includes('hello everyone'));
+  check((await text(pages[2], '#chatlog')).includes('hello everyone'), 'chat history survives a reload');
+  // Keep the fixed panel from covering mission buttons during the game flow.
+  for (const p of pages) await p.evaluate(() => { document.getElementById('chatpanel').style.display = 'none'; });
 
   check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden before start');
   check(await a.$eval('#missionbox0', el => el.offsetParent === null), 'mission 1 box hidden before start');

@@ -5,6 +5,7 @@ var io = require('socket.io')(server);
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser')
 var fs = require('fs') // this engine requires the fs module
+var chat = require('./chat');
 function JsLiteral(value) {
   if (value == undefined || value == '') return 'null';
   // Escape '<' so a value cannot close the inline <script> tag.
@@ -359,6 +360,7 @@ function JoinRoom(socket, room_id) {
   socket.myroom = room_id;
   console.log('JOIN', socket.id, socket.myroom);
   SendJoin(socket);
+  chat.Send(room, socket);
   return room;
 }
 
@@ -413,6 +415,7 @@ function SendJoin(socket) {
 
 io.on('connect', function(socket) {
   console.log('New IO connection.', socket.handshake.address);
+  chat.Setup(socket, io, GetRoom, PlayerId);
 
   socket.on('disconnect', function() {
     LeaveRoom(socket);
