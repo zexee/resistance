@@ -11,6 +11,18 @@ function JsLiteral(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+var NAME_MAX = 20;
+function ClampRawName(name) {
+  if (name == undefined) return name;
+  return String(name).slice(0, NAME_MAX);
+}
+function ClampEscapedName(name) {
+  if (name == undefined) return name;
+  var raw = name;
+  try { raw = decodeURIComponent(name); } catch (e) {}
+  return encodeURIComponent(String(raw).slice(0, NAME_MAX));
+}
+
 app.engine('ntl', function (filePath, options, callback) { // define the template engine
   fs.readFile(filePath, function (err, content) {
     if (err) return callback(err)
@@ -39,7 +51,7 @@ app.get('/', function (req, res) {
 })
 
 app.post('/setname', function (req, res) {
-  var name = req.body.name;
+  var name = ClampRawName(req.body.name);
   var room = req.body.room;
   var pid = req.body.pid;
   if (name != undefined) {
@@ -330,8 +342,14 @@ function JoinRoom(socket, room_id) {
   if (room_id == undefined || rooms[room_id] == undefined) {
     return JoinRoom(socket, 'Lobby');
   }
-  socket.join(room_id);
   var room = rooms[room_id];
+  if (room.id != 'Lobby' && room.n >= 5 && room.phase != 'ended' &&
+      (room.players == undefined || room.players.indexOf(PlayerId(socket)) < 0)) {
+    // A game is in progress: only its players may (re)join.
+    console.log('DENY', socket.id, room_id);
+    return JoinRoom(socket, 'Lobby');
+  }
+  socket.join(room_id);
   if (socket.pid != undefined) {
     if (room.order == undefined) room.order = [];
     if (room.order.indexOf(socket.pid) < 0) room.order.push(socket.pid);
@@ -400,7 +418,7 @@ io.on('connect', function(socket) {
   });
 
   socket.on('me', function(data) {
-    socket.name = data.name;
+    socket.name = ClampEscapedName(data.name);
     socket.pid = data.pid;
     var room = JoinRoom(socket, data.room);
     if (room.names == undefined) room.names = {};
@@ -523,6 +541,7 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     if (room.current_proposal['text'] == undefined) return;
+    if (room.players.indexOf(PlayerId(socket)) < 0) return;
     room.current_proposal[PlayerId(socket)] = 1;
     if (ProposalVotes(room) == room.n) {
       FinishProposal(room);
@@ -533,6 +552,7 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     if (room.current_proposal['text'] == undefined) return;
+    if (room.players.indexOf(PlayerId(socket)) < 0) return;
     room.current_proposal[PlayerId(socket)] = -1;
     if (ProposalVotes(room) == room.n) {
       FinishProposal(room);

@@ -18,7 +18,11 @@ function connect(port, name, pid) {
     const state = { s, name, pid, room: null, lastVotes: null, roles: null };
     s.on('connect', () => resolve(state));
     s.on('connect_error', reject);
-    s.on('join', d => { if (d.room !== 'Lobby') state.room = d.room; state.lastPlayers = d.players; });
+    s.on('join', d => {
+      if (d.room !== 'Lobby') state.room = d.room;
+      state.lastJoinRoom = d.room;
+      state.lastPlayers = d.players;
+    });
     s.on('votes', d => { state.lastVotes = d; state.lastPlayers = d.players; });
     s.on('role', d => { state.roles = d; });
   });
@@ -108,6 +112,17 @@ async function castMission(clients, failPids) {
   check(c[0].lastPlayers.every(p => p.pid && p.name && p.online), 'players carry pid, name and online');
   check(N5.some(n => 'pid-' + n === v(c).leader), 'leader is a persistent pid');
   check(v(c).rejected === 0, 'no rejections at start');
+
+  // mid-game join is denied, long names are clamped
+  const longName = 'X'.repeat(30);
+  const spec = await connect(port, longName, 'pid-spec');
+  spec.s.emit('me', { name: encodeURIComponent(longName), room: c[0].room, pid: 'pid-spec' });
+  await wait(300);
+  check(spec.lastJoinRoom === 'Lobby', 'mid-game join denied');
+  check(!c[0].lastPlayers.some(p => p.pid === 'pid-spec'), 'spectator not added to the game roster');
+  check(spec.lastPlayers.some(p => p.name === 'X'.repeat(20)), 'long names clamped to 20 chars');
+  spec.s.close();
+  await wait(200);
 
   const observer = c[0];
   const nonLeader = c.find(x => x !== observer && x.pid !== v(c).leader);
