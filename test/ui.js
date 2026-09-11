@@ -373,6 +373,15 @@ async function castMission(pages, round, failNames) {
   });
   check(ruleGap < 40, 'Rule button is at the right end of the navbar');
 
+  await b.setViewport({ width: 360, height: 700 });
+  check(await b.evaluate(() => {
+    const rule = document.querySelector('.navbar-collapse button[data-target="#rules-modal"]').getBoundingClientRect();
+    const others = Array.from(document.querySelectorAll('.navbar-collapse button'))
+      .filter(el => el !== document.querySelector('.navbar-collapse button[data-target="#rules-modal"]') && el.offsetParent !== null);
+    return rule.bottom > 0 && others.every(el => rule.top >= el.getBoundingClientRect().bottom);
+  }), 'Rule button drops to its own line on a narrow screen');
+  await b.setViewport({ width: 800, height: 600 });
+
   await b.click('nav button[onclick="CreateRoom();"]');
   await b.waitForFunction(() => document.querySelector('#room').textContent !== '大厅' && document.querySelector('#room').textContent !== '');
   await b.waitForFunction(() => document.querySelector('#aibtn').offsetParent !== null);

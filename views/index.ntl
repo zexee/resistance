@@ -23,6 +23,12 @@
         font-size:14px;
         vertical-align:middle;
       }
+      @media (max-width: 767px) {
+        .navbar-collapse button[data-target="#rules-modal"] {
+          float: none !important;
+          display: block;
+        }
+      }
     </style>
 
 		<script type="text/javascript">
