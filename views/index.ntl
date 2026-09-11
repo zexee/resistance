@@ -22,16 +22,31 @@
       var joined = 0;
       var started = false;
       var phase = 'proposal';
+      var leader = null;
+      var rejected = 0;
+      var winner = null;
+      var results = [];
+      var missionTeams = [];
+      var inTeam = false;
       var teamSize = 0;
       var proposeRound = -1;
       var proposalOpen = false;
       var currentVoten = 0;
       var myVoted = -1;
+      function IsLeader() {
+        return started && leader != null && leader == escape(me);
+      }
       function Fill(data) {
         if (data[0] == undefined) return;
         playern = data.n;
         started = true;
         phase = data.phase;
+        leader = data.leader;
+        rejected = data.rejected;
+        winner = data.winner;
+        results = data.results;
+        missionTeams = data.mission_teams;
+        inTeam = data.mission_team.indexOf(escape(me)) >= 0;
         if (proposeRound != data.current_round) {
           $('#name_checks input[type=checkbox]').prop('checked', false);
         }
@@ -53,17 +68,12 @@
         for (var i = 0; i < 5; ++i) {
           if (data[i].votes != undefined) {
             var html = '';
-            var result = 1;
             for (var j in data[i].votes) {
               var vote = data[i].votes[j];
               if (vote == 1) html += ' <span class="label label-success">Pass</span>';
               else html += ' <span class="label label-danger">Fail</span>';
-              if (vote == 0) --result;
             }
-            if (playern >= 7 && i == 3) {
-              if (result == 0) result = 1;
-            }
-            if (result == 1) {
+            if (results[i] == 1) {
               $('#' + i).parent().parent().parent().removeClass('panel-info');
               $('#' + i).parent().parent().parent().addClass('panel-success');
               $('#' + i).parent().parent().addClass('bg-success');
@@ -73,16 +83,15 @@
               $('#' + i).parent().parent().addClass('bg-danger');
             }
             $('#' + i).html(html);
-            $('#voters' + i).html(unescape(data[i].voters.join(', ')));
           } else {
             $('#' + i).html(data[i].voten);
-            $('#voters' + i).html('');
             $('#' + i).parent().parent().parent().removeClass('panel-success');
             $('#' + i).parent().parent().parent().removeClass('panel-danger');
             $('#' + i).parent().parent().parent().addClass('panel-info');
             $('#' + i).parent().parent().removeClass('bg-success');
             $('#' + i).parent().parent().removeClass('bg-danger');
           }
+          $('#voters' + i).html(missionTeams[i] ? unescape(missionTeams[i].join(', ')) : '');
           $('#voten' + i).html(data[i].n);
           if (i == 3 && playern >= 7) {
             $('#voten3').html(data[3].n + '*');
@@ -95,7 +104,7 @@
           var yes = 0;
           var all = 0;
           for (var j in p) {
-            if (j == 'who' || j == 'text' || j == 'round') continue;
+            if (j == 'who' || j == 'text' || j == 'round' || j == 'team' || j == 'auto') continue;
             ++all;
             if (p[j] == 1) {
               votes.push(' <span class="label label-success">' + unescape(j) + '</span>');
@@ -104,12 +113,14 @@
               votes.push(' <span class="label label-danger">' + unescape(j) + '</span>');
             }
           }
-          if (yes > all / 2.0) {
+          if (p.auto) {
+            html += '<li class="list-group-item list-group-item-info">';
+          } else if (yes > all / 2.0) {
             html += '<li class="list-group-item list-group-item-success">';
           } else {
             html += '<li class="list-group-item list-group-item-danger">';
           }
-          html += 'Mission ' + (p.round + 1) + ' - ' + unescape(p.who) + ': ' + unescape(p.text) + '<p>' + votes.join('') + '</p></li>';
+          html += 'Mission ' + (p.round + 1) + (p.auto ? ' (auto-passed)' : '') + ' - ' + unescape(p.who) + ': ' + unescape(p.text) + '<p>' + votes.join('') + '</p></li>';
         }
         $('#proposals').html(html);
         
@@ -119,7 +130,7 @@
           html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + unescape(p.who) + '</span>: <span class="text-primary">' + unescape(p.text) + '</span></h3>'
           var votes = [];
           for (var j in p) {
-            if (j == 'who' || j == 'text' || j == 'round') continue;
+            if (j == 'who' || j == 'text' || j == 'round' || j == 'team' || j == 'auto') continue;
             votes.push('<span class="label label-warning">' + unescape(j) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
@@ -129,40 +140,47 @@
       }
       function UpdateButtons() {
         $('#startbtn').prop('disabled', !(room != 'Lobby' && joined >= 5 && joined <= 10));
-        $('#yesbtn').prop('disabled', !(started && proposalOpen));
-        $('#nobtn').prop('disabled', !(started && proposalOpen));
+        $('#yesbtn').prop('disabled', !(started && proposalOpen && winner == null));
+        $('#nobtn').prop('disabled', !(started && proposalOpen && winner == null));
         UpdateVisibility();
         UpdateTeamLimit();
         UpdateMissionControls();
       }
       function UpdateVisibility() {
-        var completed = proposeRound < 0 ? 5 : proposeRound;
-        var showProposal = started && phase == 'proposal' && proposeRound >= 0;
+        var showProposal = started && phase == 'proposal' && proposeRound >= 0 && winner == null;
         $('#proposalbox').toggle(showProposal);
         $('#prestart').toggle(!started);
+        $('#winner').toggle(winner != null);
+        if (winner == 'resistance') $('#winner').html('<h3><span class="label label-success">Resistance wins!</span></h3>');
+        else if (winner == 'spies') $('#winner').html('<h3><span class="label label-danger">Spies win!</span></h3>');
         for (var i = 0; i < 5; ++i) {
-          var revealed = started && (i < completed || (phase == 'mission' && i == proposeRound));
-          $('#missionbox' + i).toggle(revealed);
+          $('#missionbox' + i).toggle(started);
         }
       }
       function UpdateMissionControls() {
         for (var i = 0; i < 5; ++i) {
-          var current = started && i == proposeRound;
-          $('#nextbadge' + i).toggle(current);
-          $('button[onclick="Pass(' + i + ')"]').toggle(current).prop('disabled', !current || myVoted == i);
-          $('button[onclick="Fail(' + i + ')"]').toggle(current).prop('disabled', !current || myVoted == i);
-          $('button[onclick="ClearVote(' + i + ')"]').toggle(current).prop('disabled', !current || currentVoten == 0);
+          var canVote = started && phase == 'mission' && i == proposeRound && inTeam && winner == null;
+          $('#nextbadge' + i).toggle(started && i == proposeRound && winner == null);
+          $('button[onclick="Pass(' + i + ')"]').toggle(canVote).prop('disabled', !canVote || myVoted == i);
+          $('button[onclick="Fail(' + i + ')"]').toggle(canVote).prop('disabled', !canVote || myVoted == i);
+          $('button[onclick="ClearVote(' + i + ')"]').toggle(canVote).prop('disabled', !canVote || currentVoten == 0);
         }
       }
       function UpdateTeamLimit() {
+        var isLeader = IsLeader();
         var boxes = $('#name_checks input[type=checkbox]');
         var checked = boxes.filter(':checked').length;
+        $('#name_checks').toggle(isLeader);
         boxes.each(function () {
           this.disabled = !this.checked && checked >= teamSize;
         });
-        $('#proposebtn').prop('disabled', !(started && teamSize > 0 && checked == teamSize));
-        if (proposeRound >= 0) {
-          $('#teamhint').html('Next mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' player(s) (' + checked + '/' + teamSize + ')');
+        var canPropose = isLeader && teamSize > 0 && checked == teamSize && winner == null;
+        $('#proposebtn').prop('disabled', !canPropose).toggle(isLeader);
+        if (!isLeader) {
+          $('#teamhint').html(leader != null ? 'Waiting for ' + unescape(leader) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
+        } else if (proposeRound >= 0) {
+          var auto = rejected >= playern && playern > 0 ? ' Next proposal auto-passes.' : '';
+          $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' player(s) (' + checked + '/' + teamSize + ').' + auto);
         } else {
           $('#teamhint').html('No mission to propose');
         }
@@ -178,6 +196,12 @@
         if (room != data.room) {
           started = false;
           phase = 'proposal';
+          leader = null;
+          rejected = 0;
+          winner = null;
+          results = [];
+          missionTeams = [];
+          inTeam = false;
           teamSize = 0;
           proposeRound = -1;
           proposalOpen = false;
@@ -338,6 +362,7 @@
       <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span></h2>
       <div id="gamepad">
         <h4 id="prestart">Waiting for the game to start...</h4>
+        <div id="winner" style="display:none"></div>
         <div class="row">
           <div class="col-lg-4 col-md-6" id="proposalbox" style="display:none">
             <div class="panel panel-primary">

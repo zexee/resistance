@@ -84,20 +84,85 @@ function RoomStart(room, n) {
   room.proposals = [];
   room.current_proposal = {};
   room.phase = 'proposal';
+  room.players = Object.keys(room.sockets);
+  room.leader = room.players.length ? Math.floor(Math.random() * room.players.length) : -1;
+  room.rejected = 0;
+  room.mission_team = [];
+  room.mission_teams = [null, null, null, null, null];
+  room.results = [null, null, null, null, null];
+  room.winner = null;
+}
+
+function IsProposalMeta(k) {
+  return k == 'text' || k == 'who' || k == 'round' || k == 'team' || k == 'auto';
+}
+
+function ProposalVotes(room) {
+  var count = 0;
+  for (var k in room.current_proposal) {
+    if (!IsProposalMeta(k)) ++count;
+  }
+  return count;
+}
+
+function AdvanceLeader(room) {
+  if (room.players.length == 0) return;
+  room.leader = (room.leader + 1) % room.players.length;
+}
+
+function LeaderName(room) {
+  var id = room.players[room.leader];
+  if (id == undefined || room.sockets[id] == undefined) return null;
+  return room.sockets[id].name;
+}
+
+function ApproveProposal(room) {
+  room.proposals.push(room.current_proposal);
+  room.mission_team = room.current_proposal.team;
+  room.mission_teams[room.current_proposal.round] = room.current_proposal.team;
+  room.phase = 'mission';
+  room.rejected = 0;
+  room.current_proposal = {};
+  AdvanceLeader(room);
 }
 
 function FinishProposal(room) {
   var yes = 0;
   var all = 0;
   for (var k in room.current_proposal) {
-    if (k == 'text' || k == 'who' || k == 'round') continue;
+    if (IsProposalMeta(k)) continue;
     ++all;
     if (room.current_proposal[k] == 1) ++yes;
   }
-  // Approved proposals move the game to the mission phase.
-  room.phase = yes > all / 2.0 ? 'mission' : 'proposal';
-  room.proposals.push(room.current_proposal);
-  room.current_proposal = {};
+  if (yes > all / 2.0) {
+    ApproveProposal(room);
+  } else {
+    room.proposals.push(room.current_proposal);
+    room.current_proposal = {};
+    room.rejected++;
+    room.phase = 'proposal';
+    AdvanceLeader(room);
+  }
+}
+
+function FinishMission(room, round) {
+  var fails = 0;
+  for (var v in room.votes[round]) {
+    if (room.votes[round][v] == 0) ++fails;
+  }
+  // Mission 4 needs two fail votes when playing with 7 or more.
+  var need = (room.n >= 7 && round == 3) ? 2 : 1;
+  room.results[round] = fails < need ? 1 : 0;
+  var resistance = 0;
+  var spies = 0;
+  for (var i = 0; i < 5; ++i) {
+    if (room.results[i] == 1) ++resistance;
+    else if (room.results[i] == 0) ++spies;
+  }
+  if (resistance >= 3) room.winner = 'resistance';
+  else if (spies >= 3) room.winner = 'spies';
+  room.mission_team = [];
+  room.phase = room.winner == null ? 'proposal' : 'ended';
 }
 
 function CurrentRound(room) {
@@ -135,7 +200,13 @@ function send_votes(room, socket) {
     param: param[room.n],
     proposals: room.proposals,
     current_round: CurrentRound(room),
-    phase: room.phase
+    phase: room.phase,
+    leader: LeaderName(room),
+    rejected: room.rejected,
+    mission_team: room.mission_team,
+    mission_teams: room.mission_teams,
+    results: room.results,
+    winner: room.winner
   };
   for (var i in room.votes) {
     if (room.votes[i].length == param[room.n][i]) {
@@ -148,7 +219,7 @@ function send_votes(room, socket) {
   var current = {}
   if (room.current_proposal['text'] != undefined) {
     for (var k in room.current_proposal) {
-      if (k == 'text' || k == 'who' || k == 'round') current[k] = room.current_proposal[k];
+      if (IsProposalMeta(k)) current[k] = room.current_proposal[k];
       else current[k] = '0';
     }
   }
@@ -302,7 +373,9 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     if (room.n < 5 || room.n > 10) return;
+    if (room.phase != 'mission') return;
     if (data.round != CurrentRound(room)) return;
+    if (room.mission_team.indexOf(socket.name) < 0) return;
     console.log('vote', data);
     if (socket.voted[data.round] == undefined) {
       room.votes[data.round].push(data.vote);
@@ -312,8 +385,7 @@ io.on('connect', function(socket) {
     if (room.votes[data.round].length == param[room.n][data.round]) {
 			room.votes[data.round] = Shuffle(room.votes[data.round]);
 			room.voters[data.round] = Shuffle(room.voters[data.round]);
-      // Mission played, the next leader proposes.
-      room.phase = 'proposal';
+      FinishMission(room, data.round);
     }
     send_votes(room);
   });
@@ -321,7 +393,9 @@ io.on('connect', function(socket) {
     var room = GetRoom(socket);
     if (room.id == 'Lobby') return;
     if (room.n < 5 || room.n > 10) return;
+    if (room.phase != 'mission') return;
     if (data.round != CurrentRound(room)) return;
+    if (room.mission_team.indexOf(socket.name) < 0) return;
     console.log('clearvote', data);
     room.votes[data.round] = [];
     room.voters[data.round] = [];
@@ -335,6 +409,7 @@ io.on('connect', function(socket) {
     if (room.id == 'Lobby') return;
     if (room.n < 5 || room.n > 10) return;
     if (room.phase != 'proposal') return;
+    if (room.players[room.leader] != socket.id) return;
     var round = CurrentRound(room);
     if (round < 0) return;
     var team = data.team;
@@ -348,7 +423,12 @@ io.on('connect', function(socket) {
       if (picked[team[i]] != undefined || names[team[i]] == undefined) return;
       picked[team[i]] = 1;
     }
-    room.current_proposal = {'text': team.join(', '), 'who': socket.name, 'round': round};
+    room.current_proposal = {'text': team.join(', '), 'who': socket.name, 'round': round, 'team': team};
+    if (room.rejected >= room.players.length) {
+      // Everyone was rejected once, this proposal passes without a vote.
+      room.current_proposal['auto'] = 1;
+      ApproveProposal(room);
+    }
     send_votes(room);
   });
   socket.on('yes', function(data) {
@@ -356,7 +436,7 @@ io.on('connect', function(socket) {
     if (room.id == 'Lobby') return;
     if (room.current_proposal['text'] == undefined) return;
     room.current_proposal[socket.name] = 1;
-    if (ObjLength(room.current_proposal) == room.n + 3) {
+    if (ProposalVotes(room) == room.n) {
       FinishProposal(room);
     }
     send_votes(room);
@@ -366,7 +446,7 @@ io.on('connect', function(socket) {
     if (room.id == 'Lobby') return;
     if (room.current_proposal['text'] == undefined) return;
     room.current_proposal[socket.name] = -1;
-    if (ObjLength(room.current_proposal) == room.n + 3) {
+    if (ProposalVotes(room) == room.n) {
       FinishProposal(room);
     }
     send_votes(room);

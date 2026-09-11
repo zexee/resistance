@@ -2,12 +2,12 @@
 
 ## What this is
 
-Real-time companion/scoreboard for the physical board game The Resistance. It does not enforce game rules: roles are dealt and votes/proposals are manually entered by players, and mission success is computed in the browser for display only. Single-file server, all state in memory, no database.
+Real-time companion/scoreboard for the physical board game The Resistance. Roles are dealt and votes are entered manually by players, but the server enforces leader rotation, proposal approval, team-only mission votes, mission results (including the mission-4 two-fail rule), and the first-to-3 winner. Single-file server, all state in memory, no database.
 
 ## Commands
 
 - Install: `npm install`
-- Run: `npm start` (port 7777 hardcoded at server.js:334, no env override)
+- Run: `npm start` (port 7777 hardcoded at server.js:456, no env override)
 - No test, lint, or build tooling exists; `npm test` is a stub that exits 1. Verify changes by running the server and exercising it in a browser at http://localhost:7777. Gameplay needs 5-10 concurrent sockets, so use multiple browser windows/incognito sessions.
 
 ## Layout
@@ -21,8 +21,9 @@ Real-time companion/scoreboard for the physical board game The Resistance. It do
 - `.ntl` is a custom template engine defined at server.js:8; it only replaces `#name#` and `#room#`. A new server-rendered value needs a matching replace in the engine and in the `/` route (server.js:27), which pre-quotes values as JS string literals.
 - `param` (server.js:42) maps player count to a 6-element array: indices 0-4 are mission team sizes, index 5 is the spy count.
 - Player names are URL-escaped with `escape()` on the client before sending and `unescape()`d for display. Keep this convention when touching name handling.
-- Rooms with an active game are kept for 5 hours after the last player leaves and swept every 30 minutes (server.js:191).
-- The current mission is inferred server-side by `CurrentRound` (server.js:103): the first mission without a complete Pass/Fail result. `propose` sends `{team: [escaped names]}`, which must contain exactly `param[n][round]` distinct room members; anything else is silently dropped. Proposals carry a `round` key that the client uses for display, and `send_votes` includes `current_round`. `vote`/`clearvote` are only accepted for that same round; the client disables the other missions' buttons and marks the current one with a `Next` badge.
-- `room.phase` is `proposal` or `mission`; `FinishProposal` (server.js:89) sets `mission` on a strict yes majority, and a completed mission vote sets it back to `proposal`. The server drops `propose` unless the phase is `proposal` and drops `yes`/`no` unless a proposal is open.
-- Client button states and phase visibility are centralized in `UpdateButtons`/`UpdateVisibility` (views/index.ntl): the proposal box shows only in the proposal phase, mission panels are revealed as their proposals are approved (completed ones stay visible without buttons), and before the game starts only Start is enabled (needs 5-10 players). Yes/No need an open proposal, Pass/Fail need the current mission and are disabled after this client's own vote, Clear needs at least one vote.
+- Rooms with an active game are kept for 5 hours after the last player leaves and swept every 30 minutes (server.js:278).
+- The current mission is inferred server-side by `CurrentRound` (server.js:168): the first mission without a complete Pass/Fail result. `propose` sends `{team: [escaped names]}`, which must contain exactly `param[n][round]` distinct room members; anything else is silently dropped. Proposals carry a `round` key that the client uses for display, and `send_votes` includes `current_round`. `vote`/`clearvote` are only accepted for that same round.
+- Only the current leader can `propose`. `room.players` is the join-order snapshot taken at start, `room.leader` is an index into it (random first leader), and it advances after every proposal outcome. If `room.rejected` reaches the player count, the next proposal auto-passes without a vote (`auto:1` on the archived proposal).
+- `room.phase` is `proposal`, `mission`, or `ended`. `FinishProposal` (server.js:129) applies a strict yes majority: approval sets `mission` and records `room.mission_team`/`room.mission_teams`, rejection increments `room.rejected`. `FinishMission` (server.js:148) records `room.results` (mission 4 needs two fails at 7+ players), sets `room.winner` at 3 wins, and returns to `proposal` or `ended`. `propose` is dropped unless the phase is `proposal`, `yes`/`no` unless a proposal is open, and `vote`/`clearvote` unless the voter is in `room.mission_team`.
+- Client button states and phase visibility are centralized in `UpdateButtons`/`UpdateVisibility` (views/index.ntl): the proposal box shows only in the proposal phase, and non-leaders get the checkbox list and Propose button hidden entirely (they only see the waiting hint). Mission cards are all visible once the game starts (titles carry the team sizes), but only team members of the current mission see Pass/Fail/Clear during the mission phase. A winner banner replaces the proposal box when `winner` is set. Before the game starts only Start is enabled (needs 5-10 players).
 - Commit messages in this repo start with `* ` (e.g. `* page change`).
