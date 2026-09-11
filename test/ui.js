@@ -106,6 +106,17 @@ async function castMission(pages, round, failNames) {
   check(await simB.evaluate(() => me) === 'SimB', 'second window gets its own forced name');
   await sharedContext.close();
 
+  // no name cookie: dismissing the prompt falls back to the default name
+  const anonContext = await browser.createBrowserContext();
+  const anon = await anonContext.newPage();
+  anon.on('dialog', d => d.dismiss());
+  await anon.goto(url, { waitUntil: 'domcontentloaded' });
+  await anon.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
+  check((await anon.evaluate(() => me)) === 'Harry Potter', 'dismissed name prompt falls back to Harry Potter');
+  check((await anon.$eval('#me', el => el.textContent)) === 'Harry Potter', 'default name shown in the navbar');
+  check((await anon.$eval('#names', el => el.textContent)).includes('Harry Potter'), 'default name shown in the roster');
+  await anonContext.close();
+
   const a = await makePage(browser, url, NAMES[0]);
   check(await a.$eval('#startbtn', el => el.offsetParent === null), 'start button hidden in lobby');
   check((await text(a, '#lobbyrules')).includes('strict majority'), 'lobby shows game rules');

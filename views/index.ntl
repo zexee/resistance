@@ -373,7 +373,7 @@
       }
       function ChangeName() {
         me = prompt("Please enter your name", me == null ? "Harry Potter" : me);
-        if (me == null) return;
+        if (me == null || me == '') me = "Harry Potter";
         if (me.length > 20) me = me.slice(0, 20);
         SaveName();
         $('#me').html(HtmlEscape(me));
