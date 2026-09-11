@@ -460,15 +460,10 @@ function LeaveRoom(socket) {
     socket.leave(socket.myroom);
     delete room.sockets[socket.id];
     if (ObjLength(room.sockets) == 0) {
-      if (room.n == 0) {
-        // No game and no user, delete the room.
-        console.log('DELROOM', socket.myroom);
-        delete rooms[socket.myroom];
-      } else {
-        // There is a game, keep the room for a time.
-        room.last_time = new Date();
-        console.log('EMPTYROOM', room.last_time);
-      }
+      // Keep the empty room for a grace period so a reconnect can still
+      // join it; DeleteEmptyRooms sweeps it away later.
+      room.last_time = new Date();
+      console.log('EMPTYROOM', room.id, room.last_time);
     }
     SendJoin(socket);
     socket.myroom = null;

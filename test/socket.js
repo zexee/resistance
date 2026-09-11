@@ -324,6 +324,20 @@ async function castMission(clients, failPids) {
   c.forEach(x => x.s.close());
   await wait(200);
 
+  // ---- sole occupant of a pre-game room survives a disconnect ----
+  const lone = await join(port, undefined, 'Solo', 'pid-solo');
+  lone.s.emit('create');
+  await wait(250);
+  const loneRoom = lone.room;
+  check(loneRoom !== null && loneRoom !== 'Lobby', 'solo player created a room');
+  lone.s.close();
+  await wait(300);
+  const lone2 = await join(port, loneRoom, 'Solo', 'pid-solo');
+  await wait(300);
+  check(lone2.room === loneRoom, 'sole occupant rejoins the same room after a disconnect');
+  lone2.s.close();
+  await wait(200);
+
   // ---- chat ----
   const chatA = await join(port, undefined, 'ChatA', 'pid-chatA');
   const chatB = await join(port, undefined, 'ChatB', 'pid-chatB');
