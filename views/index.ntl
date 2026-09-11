@@ -15,6 +15,10 @@
       .label {
         font-size:100%;
       }
+      .label-small {
+        font-size:14px;
+        vertical-align:middle;
+      }
     </style>
 
 		<script type="text/javascript">
@@ -28,6 +32,7 @@
       var results = [];
       var missionTeams = [];
       var inTeam = false;
+      var playerNames = [];
       var teamSize = 0;
       var proposeRound = -1;
       var proposalOpen = false;
@@ -35,6 +40,9 @@
       var myVoted = -1;
       function IsLeader() {
         return started && leader != null && leader == escape(me);
+      }
+      function IsProposalMeta(k) {
+        return k == 'text' || k == 'who' || k == 'round' || k == 'team' || k == 'auto';
       }
       function Fill(data) {
         if (data[0] == undefined) return;
@@ -92,10 +100,8 @@
             $('#' + i).parent().parent().removeClass('bg-danger');
           }
           $('#voters' + i).html(missionTeams[i] ? unescape(missionTeams[i].join(', ')) : '');
-          $('#voten' + i).html(data[i].n);
-          if (i == 3 && playern >= 7) {
-            $('#voten3').html(data[3].n + '*');
-          }
+          $('#voten' + i).html(data[i].n + ' players');
+          $('#failneed' + i).html(data.fail_need[i] + ' to fail');
         }
         html = '';
         for (var i in data.proposals) {
@@ -104,7 +110,7 @@
           var yes = 0;
           var all = 0;
           for (var j in p) {
-            if (j == 'who' || j == 'text' || j == 'round' || j == 'team' || j == 'auto') continue;
+            if (IsProposalMeta(j)) continue;
             ++all;
             if (p[j] == 1) {
               votes.push(' <span class="label label-success">' + unescape(j) + '</span>');
@@ -129,11 +135,20 @@
           var p = data.proposal;
           html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + unescape(p.who) + '</span>: <span class="text-primary">' + unescape(p.text) + '</span></h3>'
           var votes = [];
+          var votedNames = {};
           for (var j in p) {
-            if (j == 'who' || j == 'text' || j == 'round' || j == 'team' || j == 'auto') continue;
+            if (IsProposalMeta(j)) continue;
+            votedNames[j] = 1;
             votes.push('<span class="label label-warning">' + unescape(j) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
+          var waiting = [];
+          for (var k in playerNames) {
+            if (votedNames[playerNames[k]] == undefined) waiting.push(unescape(playerNames[k]));
+          }
+          if (waiting.length) {
+            html += '<p class="text-muted">Waiting for: ' + waiting.join(', ') + '</p>';
+          }
         }
         $('#proposal').html(html);
         UpdateButtons();
@@ -142,9 +157,22 @@
         $('#startbtn').prop('disabled', !(room != 'Lobby' && joined >= 5 && joined <= 10));
         $('#yesbtn').prop('disabled', !(started && proposalOpen && winner == null));
         $('#nobtn').prop('disabled', !(started && proposalOpen && winner == null));
+        UpdateNames();
         UpdateVisibility();
         UpdateTeamLimit();
         UpdateMissionControls();
+      }
+      function UpdateNames() {
+        var html = [];
+        for (var i in playerNames) {
+          var name = playerNames[i];
+          var item = '<strong class="text-primary">' + unescape(name) + '</strong>';
+          if (started && leader != null && name == leader) {
+            item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
+          }
+          html.push(item);
+        }
+        $('#names').html(html.join(' | '));
       }
       function UpdateVisibility() {
         var showProposal = started && phase == 'proposal' && proposeRound >= 0 && winner == null;
@@ -153,6 +181,17 @@
         $('#winner').toggle(winner != null);
         if (winner == 'resistance') $('#winner').html('<h3><span class="label label-success">Resistance wins!</span></h3>');
         else if (winner == 'spies') $('#winner').html('<h3><span class="label label-danger">Spies win!</span></h3>');
+        if (started) {
+          var resistance = 0;
+          var spies = 0;
+          for (var i = 0; i < 5; ++i) {
+            if (results[i] == 1) ++resistance;
+            else if (results[i] == 0) ++spies;
+          }
+          $('#score').html(' <span class="label label-success label-small">Resistance ' + resistance + '</span> <span class="label label-danger label-small">Spies ' + spies + '</span>');
+        } else {
+          $('#score').html('');
+        }
         for (var i = 0; i < 5; ++i) {
           $('#missionbox' + i).toggle(started);
         }
@@ -179,10 +218,16 @@
         if (!isLeader) {
           $('#teamhint').html(leader != null ? 'Waiting for ' + unescape(leader) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
         } else if (proposeRound >= 0) {
-          var auto = rejected >= playern && playern > 0 ? ' Next proposal auto-passes.' : '';
-          $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' player(s) (' + checked + '/' + teamSize + ').' + auto);
+          $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' players (' + checked + '/' + teamSize + ').');
         } else {
           $('#teamhint').html('No mission to propose');
+        }
+        if (started && proposeRound >= 0 && playern > 0) {
+          var info = 'Rejected proposals: ' + rejected + '/' + playern;
+          if (rejected >= playern) info += ' - the next proposal passes automatically';
+          $('#rejectinfo').html(info);
+        } else {
+          $('#rejectinfo').html('');
         }
       }
       function Propose() {
@@ -220,10 +265,8 @@
         $('#startbtn').toggle(data.room != 'Lobby');
         joined = data.names.length;
         $('#joined').html(joined);
-        var nameshtml = [];
-        for (var i in data.names)
-          nameshtml.push('<strong class="text-primary">' + unescape(data.names[i]) + '</strong>');
-        $('#names').html(nameshtml.join(' | '));
+        playerNames = data.names;
+        UpdateNames();
         var html = '';
         for (var i in data.names) {
           var name = data.names[i];
@@ -247,6 +290,7 @@
         }
       }
       function Connect() {
+        $('#lobbyrules').html($('#rules-modal .modal-body').html());
         if (me == null) {
           ChangeName();
         }
@@ -355,11 +399,12 @@
           <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
           <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
           <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> Leave</button>
+          <button class="btn navbar-btn btn-info" data-toggle="modal" data-target="#rules-modal"><i class="fa fa-lg fa-book"></i> Rules</button>
         </div>
       </div>
     </nav>
     <div class="container-fluid">
-      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span></h2>
+      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span> <span id="score"></span></h2>
       <div id="gamepad">
         <h4 id="prestart">Waiting for the game to start...</h4>
         <div id="winner" style="display:none"></div>
@@ -372,6 +417,7 @@
               <div class="panel-body">
                 <ul class="list-group" id="proposals"></ul>
                 <div class="well well-sm">
+                  <p id="rejectinfo" class="text-muted"></p>
                   <div id="name_checks"></div>
                   <p id="teamhint" class="text-muted"></p>
                   <button class="btn btn-primary" id="proposebtn" disabled onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
@@ -385,7 +431,7 @@
           <div class="col-lg-2 col-md-3" id="missionbox0" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 1 (<span id="voten0"></span>) <span class="label label-warning" id="nextbadge0" style="display:none">Next</span>
+                Mission 1 (<span id="voten0"></span>, <span id="failneed0"></span>) <span class="label label-warning" id="nextbadge0" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="0"></span></p>
@@ -397,7 +443,7 @@
           <div class="col-lg-2 col-md-3" id="missionbox1" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 2 (<span id="voten1"></span>) <span class="label label-warning" id="nextbadge1" style="display:none">Next</span>
+                Mission 2 (<span id="voten1"></span>, <span id="failneed1"></span>) <span class="label label-warning" id="nextbadge1" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="1"></span></p>
@@ -409,7 +455,7 @@
           <div class="col-lg-2 col-md-3" id="missionbox2" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 3 (<span id="voten2"></span>) <span class="label label-warning" id="nextbadge2" style="display:none">Next</span>
+                Mission 3 (<span id="voten2"></span>, <span id="failneed2"></span>) <span class="label label-warning" id="nextbadge2" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="2"></span></p>
@@ -421,7 +467,7 @@
           <div class="col-lg-2 col-md-3" id="missionbox3" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 4 (<span id="voten3"></span>) <span class="label label-warning" id="nextbadge3" style="display:none">Next</span>
+                Mission 4 (<span id="voten3"></span>, <span id="failneed3"></span>) <span class="label label-warning" id="nextbadge3" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="3"></span></p>
@@ -433,7 +479,7 @@
           <div class="col-lg-2 col-md-3" id="missionbox4" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 5 (<span id="voten4"></span>) <span class="label label-warning" id="nextbadge4" style="display:none">Next</span>
+                Mission 5 (<span id="voten4"></span>, <span id="failneed4"></span>) <span class="label label-warning" id="nextbadge4" style="display:none">Next</span>
               </div>
               <div class="panel-body">
                 <p>Votes: <span id="4"></span></p>
@@ -455,6 +501,43 @@
           <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
           a room.
         </h4>
+        <h4>Game rules</h4>
+        <div id="lobbyrules"></div>
+      </div>
+    </div>
+    <div class="modal fade" id="rules-modal" tabindex="-1" role="dialog">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            <h4 class="modal-title">Game rules</h4>
+          </div>
+          <div class="modal-body">
+            <p>5-10 players. Each player is secretly a Resistance member or a Spy; the Spies know each other.</p>
+            <ul>
+              <li>The game lasts up to 5 missions. The first side to win 3 missions wins.</li>
+              <li>Each mission the leader proposes a team of the size shown on the mission card.</li>
+              <li>All players vote Yes or No; a strict majority approves the team.</li>
+              <li>If a proposal is rejected, leadership passes to the next player. Once every player has proposed once and all were rejected, the next proposal passes automatically.</li>
+              <li>When a team is approved, only its members vote Pass or Fail. One Fail fails the mission, except mission 4 with 7+ players, which needs 2 Fails.</li>
+              <li>The leader rotates in player order; the first leader is random.</li>
+            </ul>
+            <table class="table table-condensed">
+              <thead><tr><th>Players</th><th>Spies</th><th>Mission teams</th></tr></thead>
+              <tbody>
+                <tr><td>5</td><td>2</td><td>2 3 2 3 3</td></tr>
+                <tr><td>6</td><td>2</td><td>2 3 4 3 4</td></tr>
+                <tr><td>7</td><td>3</td><td>2 3 3 4 4</td></tr>
+                <tr><td>8</td><td>3</td><td>3 4 4 5 5</td></tr>
+                <tr><td>9</td><td>3</td><td>3 4 4 5 5</td></tr>
+                <tr><td>10</td><td>4</td><td>3 4 4 5 5</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+          </div>
+        </div>
       </div>
     </div>
 	</body>

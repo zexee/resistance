@@ -206,7 +206,8 @@ function send_votes(room, socket) {
     mission_team: room.mission_team,
     mission_teams: room.mission_teams,
     results: room.results,
-    winner: room.winner
+    winner: room.winner,
+    fail_need: [1, 1, 1, room.n >= 7 ? 2 : 1, 1]
   };
   for (var i in room.votes) {
     if (room.votes[i].length == param[room.n][i]) {
