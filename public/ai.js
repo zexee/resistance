@@ -48,13 +48,6 @@
 
   function Build() {
     if (document.getElementById('aimodal') != null) return;
-    var aiButton =
-      '<button class="btn navbar-btn btn-info" id="aibtn" type="button" style="display:none">' +
-        '<i class="fa fa-microchip"></i> 添加 AI' +
-      '</button>';
-    var rulesButton = $('.navbar-collapse button[data-target="#rules-modal"]');
-    if (rulesButton.length) rulesButton.before(aiButton);
-    else $('.navbar-collapse').append(aiButton);
     $('body').append(
       '<div class="modal fade" id="aimodal" tabindex="-1" role="dialog">' +
         '<div class="modal-dialog" role="document">' +
@@ -142,20 +135,17 @@
 
   function Render() {
     if (document.getElementById('aimodal') == null) return;
-    if (!enabled) {
-      $('#aibtn').hide();
-      return;
-    }
-    $('#aibtn').toggle(InRoom());
     var opts = '';
     for (var i = 0; i < models.length; ++i) {
       opts += '<option value="' + EscapeHtml(models[i].id) + '">' + EscapeHtml(models[i].label) + '</option>';
     }
     if ($('#aimodel').html() != opts) $('#aimodel').html(opts);
     var canEdit = CanEdit();
-    $('#aiaddbtn').prop('disabled', !canEdit);
-    $('#aimodel').prop('disabled', !canEdit);
-    if (!InRoom()) $('#aihint').text('加入房间后才能添加 AI 玩家。');
+    var canAdd = enabled && canEdit;
+    $('#aiaddbtn').prop('disabled', !canAdd);
+    $('#aimodel').prop('disabled', !canAdd);
+    if (!enabled) $('#aihint').text('未配置 AI 模型，无法添加 AI 玩家。');
+    else if (!InRoom()) $('#aihint').text('加入房间后才能添加 AI 玩家。');
     else if (!canEdit) $('#aihint').text('AI 玩家只能在游戏开始前添加或移除。');
     else $('#aihint').text('AI 玩家通过已配置的模型进行行动。');
     var html = '';
