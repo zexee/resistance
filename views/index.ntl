@@ -19,16 +19,27 @@
 
 		<script type="text/javascript">
       var playern = 0;
+      var joined = 0;
+      var started = false;
+      var phase = 'proposal';
       var teamSize = 0;
       var proposeRound = -1;
+      var proposalOpen = false;
+      var currentVoten = 0;
+      var myVoted = -1;
       function Fill(data) {
         if (data[0] == undefined) return;
         playern = data.n;
+        started = true;
+        phase = data.phase;
         if (proposeRound != data.current_round) {
           $('#name_checks input[type=checkbox]').prop('checked', false);
         }
         proposeRound = data.current_round;
         teamSize = proposeRound >= 0 ? data[proposeRound].n : 0;
+        if (proposeRound < 0 || data[proposeRound].voten == 0) myVoted = -1;
+        proposalOpen = data.proposal['text'] != undefined;
+        currentVoten = proposeRound >= 0 ? data[proposeRound].voten : 0;
         $('#playern').html(data.n);
         $('#room').html(data.room);
         if (data.room == 'Lobby') {
@@ -114,16 +125,33 @@
           html += '<p>' + votes.join(' ') + '</p>';
         }
         $('#proposal').html(html);
+        UpdateButtons();
+      }
+      function UpdateButtons() {
+        $('#startbtn').prop('disabled', !(room != 'Lobby' && joined >= 5 && joined <= 10));
+        $('#yesbtn').prop('disabled', !(started && proposalOpen));
+        $('#nobtn').prop('disabled', !(started && proposalOpen));
+        UpdateVisibility();
         UpdateTeamLimit();
         UpdateMissionControls();
       }
+      function UpdateVisibility() {
+        var completed = proposeRound < 0 ? 5 : proposeRound;
+        var showProposal = started && phase == 'proposal' && proposeRound >= 0;
+        $('#proposalbox').toggle(showProposal);
+        $('#prestart').toggle(!started);
+        for (var i = 0; i < 5; ++i) {
+          var revealed = started && (i < completed || (phase == 'mission' && i == proposeRound));
+          $('#missionbox' + i).toggle(revealed);
+        }
+      }
       function UpdateMissionControls() {
         for (var i = 0; i < 5; ++i) {
-          var current = i == proposeRound;
+          var current = started && i == proposeRound;
           $('#nextbadge' + i).toggle(current);
-          $('button[onclick="Pass(' + i + ')"]').prop('disabled', !current);
-          $('button[onclick="Fail(' + i + ')"]').prop('disabled', !current);
-          $('button[onclick="ClearVote(' + i + ')"]').prop('disabled', !current);
+          $('button[onclick="Pass(' + i + ')"]').toggle(current).prop('disabled', !current || myVoted == i);
+          $('button[onclick="Fail(' + i + ')"]').toggle(current).prop('disabled', !current || myVoted == i);
+          $('button[onclick="ClearVote(' + i + ')"]').toggle(current).prop('disabled', !current || currentVoten == 0);
         }
       }
       function UpdateTeamLimit() {
@@ -132,7 +160,7 @@
         boxes.each(function () {
           this.disabled = !this.checked && checked >= teamSize;
         });
-        $('#proposebtn').prop('disabled', !(teamSize > 0 && checked == teamSize));
+        $('#proposebtn').prop('disabled', !(started && teamSize > 0 && checked == teamSize));
         if (proposeRound >= 0) {
           $('#teamhint').html('Next mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' player(s) (' + checked + '/' + teamSize + ')');
         } else {
@@ -147,6 +175,15 @@
         socket.emit('propose', {team: team});
       }
       function Join(data) {
+        if (room != data.room) {
+          started = false;
+          phase = 'proposal';
+          teamSize = 0;
+          proposeRound = -1;
+          proposalOpen = false;
+          currentVoten = 0;
+          myVoted = -1;
+        }
         $('#room').html(data.room);
         room = data.room;
         if (data.room == 'Lobby') {
@@ -156,7 +193,9 @@
           $('#gamepad').show();
           $('#gameinstruction').hide();
         }
-        $('#joined').html(data.names.length);
+        $('#startbtn').toggle(data.room != 'Lobby');
+        joined = data.names.length;
+        $('#joined').html(joined);
         var nameshtml = [];
         for (var i in data.names)
           nameshtml.push('<strong class="text-primary">' + unescape(data.names[i]) + '</strong>');
@@ -167,7 +206,7 @@
           html += '<div class="checkbox"><label><input type="checkbox" value="' + name + '">' + unescape(name) + '</label></div>';
         }
         $('#name_checks').html(html);
-        UpdateTeamLimit();
+        UpdateButtons();
       }
       var me = #name#;
       var room = #room#;
@@ -206,6 +245,10 @@
           });
         });
         socket.on('role', function(data) {
+          started = true;
+          phase = 'proposal';
+          myVoted = -1;
+          UpdateButtons();
           if (data.role == 0) {
             var msg = '';
             if (data.spys.length == 2) {
@@ -238,9 +281,13 @@
         socket.emit('start');
       }
       function Pass(round) {
+        myVoted = round;
+        UpdateButtons();
         socket.emit('vote', {round: round, vote: 1});
       }
       function Fail(round) {
+        myVoted = round;
+        UpdateButtons();
         socket.emit('vote', {round: round, vote: 0});
       }
       function ClearVote(round) {
@@ -284,15 +331,15 @@
           <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
           <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
           <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> Leave</button>
-          <button class="btn navbar-btn btn-danger" onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button>
         </div>
       </div>
     </nav>
     <div class="container-fluid">
-      <h2><i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span></h2>
+      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span></h2>
       <div id="gamepad">
+        <h4 id="prestart">Waiting for the game to start...</h4>
         <div class="row">
-          <div class="col-lg-4 col-md-6">
+          <div class="col-lg-4 col-md-6" id="proposalbox" style="display:none">
             <div class="panel panel-primary">
               <div class="panel-heading">
                 <i class="fa fa-users"></i> Players number: <span id="playern"></span>, <i class="fa fa-user-secret"></i> Spies number: <span id="spyn"></span>
@@ -302,15 +349,15 @@
                 <div class="well well-sm">
                   <div id="name_checks"></div>
                   <p id="teamhint" class="text-muted"></p>
-                  <button class="btn btn-primary" id="proposebtn" onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
+                  <button class="btn btn-primary" id="proposebtn" disabled onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
                 </div>
                 <div class="well well-sm" id="proposal"></div>
-                <button class="btn btn-success" onclick="Yes()"><i class="fa fa-thumbs-up"></i> Yes</button>
-                <button class="btn btn-danger" onclick="No()"><i class="fa fa-thumbs-down"></i> No</button>
+                <button class="btn btn-success" id="yesbtn" disabled onclick="Yes()"><i class="fa fa-thumbs-up"></i> Yes</button>
+                <button class="btn btn-danger" id="nobtn" disabled onclick="No()"><i class="fa fa-thumbs-down"></i> No</button>
               </div>
             </div>
           </div>
-          <div class="col-lg-2 col-md-3">
+          <div class="col-lg-2 col-md-3" id="missionbox0" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
                 Mission 1 (<span id="voten0"></span>) <span class="label label-warning" id="nextbadge0" style="display:none">Next</span>
@@ -318,11 +365,11 @@
               <div class="panel-body">
                 <p>Votes: <span id="0"></span></p>
                 <p>Team: <span class="text-primary" id="voters0"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(0)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(0)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(0)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(0)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(0)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(0)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
-          <div class="col-lg-2 col-md-3">
+          <div class="col-lg-2 col-md-3" id="missionbox1" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
                 Mission 2 (<span id="voten1"></span>) <span class="label label-warning" id="nextbadge1" style="display:none">Next</span>
@@ -330,11 +377,11 @@
               <div class="panel-body">
                 <p>Votes: <span id="1"></span></p>
                 <p>Team: <span class="text-primary" id="voters1"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(1)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(1)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(1)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(1)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(1)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(1)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
-          <div class="col-lg-2 col-md-3">
+          <div class="col-lg-2 col-md-3" id="missionbox2" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
                 Mission 3 (<span id="voten2"></span>) <span class="label label-warning" id="nextbadge2" style="display:none">Next</span>
@@ -342,11 +389,11 @@
               <div class="panel-body">
                 <p>Votes: <span id="2"></span></p>
                 <p>Team: <span class="text-primary" id="voters2"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(2)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(2)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(2)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(2)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(2)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(2)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
-          <div class="col-lg-2 col-md-3">
+          <div class="col-lg-2 col-md-3" id="missionbox3" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
                 Mission 4 (<span id="voten3"></span>) <span class="label label-warning" id="nextbadge3" style="display:none">Next</span>
@@ -354,11 +401,11 @@
               <div class="panel-body">
                 <p>Votes: <span id="3"></span></p>
                 <p>Team: <span class="text-primary" id="voters3"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(3)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(3)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(3)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(3)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(3)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(3)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
-          <div class="col-lg-2 col-md-3">
+          <div class="col-lg-2 col-md-3" id="missionbox4" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
                 Mission 5 (<span id="voten4"></span>) <span class="label label-warning" id="nextbadge4" style="display:none">Next</span>
@@ -366,7 +413,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="4"></span></p>
                 <p>Team: <span class="text-primary" id="voters4"></span></p>
-                <div><button class="btn btn-success" onclick="Pass(4)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" onclick="Fail(4)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" onclick="ClearVote(4)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(4)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(4)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(4)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
           </div>
