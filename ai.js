@@ -327,6 +327,12 @@ function OnProposalVote(room, pid, round, finished, approved) {
   MaybeTrigger(room);
 }
 
+function OnSurrender(room, pid) {
+  if (room.ai == null) return;
+  LogEvent(room, {event: 'surrender', actor: NumOf(room, pid), winner: room.winner});
+  LogEvent(room, {event: 'game_end', winner: room.winner});
+}
+
 function OnMissionVote(room, pid, round, finished) {
   LogEvent(room, {event: 'mission_vote', actor: NumOf(room, pid), mission: round + 1});
   if (finished) {
@@ -482,6 +488,16 @@ function EnqueueVoteReconsider(room, leader) {
   }
 }
 
+function EnqueueProposalReplies(room, leader) {
+  if (room.current_proposal['text'] == undefined) return;
+  for (var i = 0; i < room.ai.order.length; ++i) {
+    var pid = room.ai.order[i];
+    if (pid == leader) continue;
+    if (room.players.indexOf(pid) < 0 || HasError(room, pid)) continue;
+    Enqueue(room, pid, 'propose_reply');
+  }
+}
+
 function ValidateNeed(room, pid, type) {
   if (!IsAi(room, pid)) return false;
   if (type == 'chat') return true;
@@ -505,6 +521,11 @@ function ValidateNeed(room, pid, type) {
         room.players[room.leader] != pid &&
         room.current_proposal[pid] != undefined;
     }
+    if (type == 'propose_reply') {
+      return room.current_proposal['text'] != undefined &&
+        room.players.indexOf(pid) >= 0 &&
+        room.players[room.leader] != pid;
+    }
   }
   if (room.phase == 'mission' && type == 'vote_mission') {
     var round = deps.CurrentRound(room);
@@ -520,8 +541,9 @@ function BuildInstruction(room, pid, type) {
     var round = deps.CurrentRound(room);
     var size = deps.Param[room.n][round];
     return '现在轮到你（' + num + '号）作为领袖提议第 ' + (round + 1) + ' 个任务的队伍。' +
-      '需要恰好 ' + size + ' 名不同玩家，请从 1 到 ' + room.players.length + ' 号中选择。\n' +
-      '只输出 JSON，例如：{"action":"propose","team":[1,2]}';
+      '需要恰好 ' + size + ' 名不同玩家，请从 1 到 ' + room.players.length + ' 号中选择。' +
+      '你可以用 say 字段附上一句中文发言（也可以省略 say）。\n' +
+      '只输出 JSON，例如：{"action":"propose","team":[1,2],"say":"我认为..."}';
   }
   if (type == 'vote_proposal') {
     var p = room.current_proposal;
@@ -552,6 +574,12 @@ function BuildInstruction(room, pid, type) {
     return '有人在聊天中发言了。你可以维持或改变你对当前提案的投票。\n' +
       '提案人：' + NumOf(room, p.by) + '号；队伍：[' + TeamNums(room, p.team).join(',') + ']；你当前投的是 ' + cur + '。\n' +
       '只输出 JSON：{"action":"reconsider","vote":"yes"}、{"action":"reconsider","vote":"no"} 或 {"action":"keep"}';
+  }
+  if (type == 'propose_reply') {
+    var p = room.current_proposal;
+    return '领袖（' + NumOf(room, p.by) + '号）刚刚提名了第 ' + (p.round + 1) + ' 个任务的队伍：[' + TeamNums(room, p.team).join(',') + ']。' +
+      '你可以用中文回应一次（简短、符合你的身份和策略），也可以保持沉默。\n' +
+      '只输出 JSON：{"action":"chat","text":"..."} 或 {"action":"silent"}';
   }
   return null;
 }
@@ -590,13 +618,17 @@ function ExtractJson(text) {
 function ApplyAction(room, pid, type, content) {
   var obj = ExtractJson(content);
   if (obj == null) {
-    // Optional reconsiderations just keep the current state.
-    if (type == 'repropose' || type == 'reconsider_vote') return null;
+    // Optional actions just keep the current state.
+    if (type == 'repropose' || type == 'reconsider_vote' || type == 'propose_reply') return null;
     return {kind: 'parse', message: '无法从模型输出中解析 JSON'};
   }
   if (type == 'propose') {
     if (obj.action != 'propose' || !Array.isArray(obj.team)) {
       return {kind: 'invalid', message: '模型没有给出合法的提案 JSON'};
+    }
+    var round = deps.CurrentRound(room);
+    if (obj.team.length != deps.Param[room.n][round]) {
+      return {kind: 'invalid', message: '模型给出的队伍人数不对'};
     }
     var team = [];
     for (var i = 0; i < obj.team.length; ++i) {
@@ -608,9 +640,15 @@ function ApplyAction(room, pid, type, content) {
       if (team.indexOf(p) >= 0) return {kind: 'invalid', message: '模型重复选择了玩家'};
       team.push(p);
     }
+    var say = typeof obj.say == 'string' && obj.say.replace(/\s/g, '') != '';
+    if (say) {
+      var said = chat.Say(ioRef, room, pid, obj.say);
+      if (said != null) LogEvent(room, {event: 'chat', actor: NumOf(room, pid), text: said.text});
+    }
     if (!deps.ProposeAction(room, pid, team)) {
       return {kind: 'invalid', message: '模型给出的提案不合法'};
     }
+    if (say) EnqueueProposalReplies(room, pid);
     return null;
   }
   if (type == 'vote_proposal') {
@@ -667,7 +705,7 @@ function ApplyAction(room, pid, type, content) {
     }
     return null;
   }
-  if (type == 'chat') {
+  if (type == 'chat' || type == 'propose_reply') {
     if (obj.action == 'silent') return null;
     var text = typeof obj.text == 'string' ? obj.text : '';
     if (text.replace(/\s/g, '') == '') return null;
@@ -852,5 +890,6 @@ module.exports = {
   OnProposal: OnProposal,
   OnProposalVote: OnProposalVote,
   OnMissionVote: OnMissionVote,
+  OnSurrender: OnSurrender,
   OnChat: OnChat
 };

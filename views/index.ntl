@@ -252,6 +252,9 @@
           var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '"' + title + '>' + HtmlEscape(PlayerLabel(player)) + '</strong>';
           if (player.ai) {
             item += ' <i class="fa fa-microchip text-info"' + title + '></i>';
+            if (!started || winner != null) {
+              item += ' <button type="button" class="btn btn-xs btn-danger aidel" data-pid="' + AttrEscape(player.pid) + '" title="Remove AI"><i class="fa fa-times"></i></button>';
+            }
           }
           if (started && leader != null && player.pid == leader) {
             item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
@@ -267,6 +270,7 @@
         var showProposal = started && phase == 'proposal' && proposeRound >= 0 && winner == null;
         $('#proposalbox').toggle(showProposal);
         $('#prestart').toggle(!started);
+        $('#surrenderbtn').toggle(started && winner == null);
         $('#winner').toggle(winner != null);
         if (winner == 'resistance') $('#winner').html('<h3><span class="label label-success">Resistance wins!</span></h3>');
         else if (winner == 'spies') $('#winner').html('<h3><span class="label label-danger">Spies win!</span></h3>');
@@ -388,7 +392,7 @@
         } catch (e) {}
       }
       function ChangeName() {
-        me = prompt("Please enter your name", me == null ? "Harry Potter" : me);
+        me = prompt("Input your name", me == null ? "" : me);
         if (me == null || me == '') me = "Harry Potter";
         if (me.length > 20) me = me.slice(0, 20);
         SaveName();
@@ -446,10 +450,17 @@
         });
       }
       $(document).on('change', '#name_checks input[type=checkbox]', UpdateTeamLimit);
+      $(document).on('click', '.aidel', function() {
+        socket.emit('ai_remove', {pid: $(this).data('pid')});
+      });
       $(document).ready(Connect);
       function Start() {
         if (started && winner == null && !confirm('Restart the game?')) return;
         socket.emit('start');
+      }
+      function Surrender() {
+        if (!confirm('Surrender and let the other side win?')) return;
+        socket.emit('surrender');
       }
       function Pass(round) {
         myVoted = round;
@@ -512,7 +523,7 @@
       </div>
     </nav>
     <div class="container-fluid">
-      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span> <span id="score"></span></h2>
+      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <button class="btn btn-warning" id="surrenderbtn" style="display:none" onclick="Surrender();"><i class="fa fa-lg fa-flag"></i> Surrender</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span> <span id="score"></span></h2>
       <div id="gamepad">
         <h4 id="prestart">Waiting for the game to start...</h4>
         <div id="winner" style="display:none"></div>

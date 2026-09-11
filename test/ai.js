@@ -17,7 +17,7 @@ const ZODIAC = ['子鼠', '丑牛', '寅虎', '卯兔', '辰龙', '巳蛇', '午
 // with a legal move derived from the last instruction, so the game can be
 // played without a real model.
 function startFakeLlm() {
-  const state = { mode: 'auto', requests: [], flipVotes: false, reproposeTeam: null, reconsiderCalls: 0 };
+  const state = { mode: 'auto', requests: [], flipVotes: false, reproposeTeam: null, reconsiderCalls: 0, leaderSays: false, replyText: null };
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', c => { body += c; });
@@ -41,12 +41,18 @@ function startFakeLlm() {
       } else if (last.indexOf('维持或改变你对当前提案的投票') >= 0) {
         state.reconsiderCalls++;
         content = JSON.stringify({ action: 'reconsider', vote: state.flipVotes ? 'no' : 'keep' });
+      } else if (last.indexOf('刚刚提名了') >= 0) {
+        content = state.replyText
+          ? JSON.stringify({ action: 'chat', text: state.replyText })
+          : JSON.stringify({ action: 'silent' });
       } else if (last.indexOf('作为领袖提议') >= 0) {
         const m = last.match(/需要恰好 (\d+)/);
         const size = m ? Number(m[1]) : 2;
         const team = [];
         for (let i = 1; i <= size; i++) team.push(i);
-        content = JSON.stringify({ action: 'propose', team: team });
+        const proposal = { action: 'propose', team: team };
+        if (state.leaderSays) proposal.say = '我提名这个队伍';
+        content = JSON.stringify(proposal);
       } else if (last.indexOf('提案投票') >= 0) {
         content = JSON.stringify({ action: 'vote_proposal', vote: 'yes' });
       } else if (last.indexOf('个任务的队员') >= 0) {
@@ -307,6 +313,19 @@ async function drive(human, maxMs) {
   for (const p of human.lastVotes.players) if (p.ai && archived != null && archived[p.pid] === -1) flipped++;
   check(flipped === 3, 'non-leader AI voters flipped their votes');
   fake.state.flipVotes = false;
+
+  // an AI leader may speak when proposing, and the other AIs may respond
+  fake.state.leaderSays = true;
+  fake.state.replyText = '我觉得可以';
+  v = await restartUntilLeader(false, 30);
+  check(v != null, 'started a game with an AI leader for the proposal talk');
+  const talkLeader = v.leader;
+  for (let i = 0; i < 200 && !human.chats.some(m => m.pid === talkLeader && m.text === '我提名这个队伍'); i++) await wait(100);
+  check(human.chats.some(m => m.pid === talkLeader && m.text === '我提名这个队伍'), 'AI leader may speak when proposing');
+  for (let i = 0; i < 200 && human.chats.filter(m => m.text === '我觉得可以').length < 3; i++) await wait(100);
+  check(human.chats.filter(m => m.text === '我觉得可以').length >= 3, 'other AIs may respond to the proposal talk');
+  fake.state.leaderSays = false;
+  fake.state.replyText = null;
 
   human.s.close();
   await wait(200);

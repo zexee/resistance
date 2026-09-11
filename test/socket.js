@@ -307,6 +307,23 @@ async function castMission(clients, failPids) {
   c.forEach(x => x.s.close());
   await wait(200);
 
+  // ---- surrender ends the game for the surrendering side ----
+  c = await makeGame(port, N5);
+  const surrendering = c[0];
+  for (let i = 0; i < 50 && surrendering.roles == null; i++) await wait(100);
+  check(surrendering.roles != null, 'role dealt before surrender');
+  const surrenderingRole = surrendering.roles.role;
+  surrendering.s.emit('surrender');
+  await wait(300);
+  check(v(c).winner === (surrenderingRole == 0 ? 'resistance' : 'spies'), 'surrender lets the other side win');
+  check(v(c).phase === 'ended', 'phase ended after surrender');
+  const proposalsBeforeSurrender = v(c).proposals.length;
+  surrendering.s.emit('propose', { team: [P5[0], P5[1]] });
+  await wait(200);
+  check(v(c).proposals.length === proposalsBeforeSurrender, 'propose ignored after surrender');
+  c.forEach(x => x.s.close());
+  await wait(200);
+
   // ---- chat ----
   const chatA = await join(port, undefined, 'ChatA', 'pid-chatA');
   const chatB = await join(port, undefined, 'ChatB', 'pid-chatB');

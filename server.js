@@ -365,6 +365,19 @@ function MissionVoteAction(room, pid, round, vote) {
   return true;
 }
 
+function SurrenderAction(room, pid) {
+  if (room.id == 'Lobby') return false;
+  if (room.n < 5 || room.n > 10) return false;
+  if (room.winner != null) return false;
+  if (room.players.indexOf(pid) < 0) return false;
+  if (room.roleByPid == undefined || room.roleByPid[pid] == undefined) return false;
+  // The surrendering side loses, the other side wins.
+  room.winner = room.roleByPid[pid] == 0 ? 'resistance' : 'spies';
+  room.phase = 'ended';
+  ai.OnSurrender(room, pid);
+  return true;
+}
+
 function send_votes(room, socket) {
   if (room.n < 5 || room.n > 10) return;
   var data = {
@@ -609,6 +622,13 @@ io.on('connect', function(socket) {
   socket.on('no', function(data) {
     var room = GetRoom(socket);
     if (ProposalVoteAction(room, PlayerId(socket), -1)) {
+      send_votes(room);
+    }
+  });
+  socket.on('surrender', function(data) {
+    var room = GetRoom(socket);
+    if (SurrenderAction(room, PlayerId(socket))) {
+      console.log('surrender', PlayerId(socket), room.winner);
       send_votes(room);
     }
   });

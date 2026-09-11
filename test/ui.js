@@ -158,9 +158,11 @@ async function castMission(pages, round, failNames) {
   // no name cookie: dismissing the prompt falls back to the default name
   const anonContext = await browser.createBrowserContext();
   const anon = await anonContext.newPage();
-  anon.on('dialog', d => d.dismiss());
+  let anonDialog = null;
+  anon.on('dialog', d => { anonDialog = d.message(); d.dismiss(); });
   await anon.goto(url, { waitUntil: 'domcontentloaded' });
   await anon.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
+  check(anonDialog === 'Input your name', 'first prompt asks for a name');
   check((await anon.evaluate(() => me)) === 'Harry Potter', 'dismissed name prompt falls back to Harry Potter');
   check((await anon.$eval('#me', el => el.textContent)) === 'Harry Potter', 'default name shown in the navbar');
   check((await anon.$eval('#names', el => el.textContent)).includes('Harry Potter'), 'default name shown in the roster');
@@ -362,8 +364,7 @@ async function castMission(pages, round, failNames) {
   }));
   const aiServer = await startServer({ AI_CONFIG: cfgPath });
   const b = await makePage(browser, 'http://localhost:' + aiServer.port, 'AiHost');
-  check(await b.$eval('#aibtn', el => el.offsetParent !== null), 'AI button visible with a config');
-  check((await text(b, '#aibtn')).includes('Add AI'), 'AI button labelled Add AI');
+  check(await b.$eval('#aibtn', el => el.offsetParent === null), 'AI button hidden outside a room');
   const navButtons = await b.$$eval('.navbar-collapse button', els => els.map(el => el.textContent.trim()));
   check(navButtons[navButtons.length - 1].includes('Rule'), 'Rule button stays last in the navbar');
   const ruleGap = await b.evaluate(() => {
@@ -371,19 +372,16 @@ async function castMission(pages, round, failNames) {
     return document.querySelector('.navbar').getBoundingClientRect().right - rule.right;
   });
   check(ruleGap < 40, 'Rule button is at the right end of the navbar');
+
+  await b.click('nav button[onclick="CreateRoom();"]');
+  await b.waitForFunction(() => document.querySelector('#room').textContent !== 'Lobby' && document.querySelector('#room').textContent !== '');
+  await b.waitForFunction(() => document.querySelector('#aibtn').offsetParent !== null);
+  check((await text(b, '#aibtn')).includes('Add AI'), 'AI button labelled Add AI');
   await b.click('#aibtn');
   await b.waitForFunction(() => document.querySelector('#aimodal').classList.contains('in'));
   check(await b.$eval('#aimodal', el => getComputedStyle(el).display !== 'none'), 'AI modal opens');
   const modelOptions = await b.$eval('#aimodel', el => Array.from(el.options).map(o => o.textContent));
   check(modelOptions.length === 1 && modelOptions[0] === 'Fake', 'AI modal lists configured models');
-  check((await text(b, '#aihint')).includes('Join a room'), 'AI modal hints to join a room in the lobby');
-  await b.$eval('#aimodal .modal-footer button', el => el.click());
-  await b.waitForFunction(() => !document.querySelector('.modal-backdrop'));
-
-  await b.click('nav button[onclick="CreateRoom();"]');
-  await b.waitForFunction(() => document.querySelector('#room').textContent !== 'Lobby' && document.querySelector('#room').textContent !== '');
-  await b.click('#aibtn');
-  await b.waitForFunction(() => document.querySelector('#aimodal').classList.contains('in'));
   for (let i = 0; i < 4; i++) {
     await b.click('#aiaddbtn');
     await wait(150);
@@ -404,6 +402,7 @@ async function castMission(pages, round, failNames) {
   await b.waitForFunction(() => document.querySelector('#joined').textContent === '5');
   await b.$eval('#aimodal .modal-footer button', el => el.click());
   await b.waitForFunction(() => !document.querySelector('.modal-backdrop'));
+  check(await b.$$eval('#names .aidel', els => els.length) === 4, 'roster shows remove buttons for AI before start');
 
   // chat before the game starts must not reach the model
   await b.type('#chatinput', '开局前聊天');
@@ -421,6 +420,8 @@ async function castMission(pages, round, failNames) {
     await wait(300);
   }
   check(await visible(b, '#proposebtn'), 'human is the leader for the reconsider test');
+  check(await b.$$eval('#names .aidel', els => els.length) === 0, 'no AI remove buttons mid-game');
+  check(await visible(b, '#surrenderbtn'), 'surrender button visible during the game');
   await b.evaluate(() => {
     const boxes = document.querySelectorAll('#name_checks input[type=checkbox]');
     boxes[0].click();
@@ -462,6 +463,13 @@ async function castMission(pages, round, failNames) {
   await b.evaluate(() => { document.querySelectorAll('#aialerts .airetry').forEach(el => el.click()); });
   await b.waitForFunction(n => (document.querySelector('#chatlog').textContent.match(/AI在这里/g) || []).length > n, {timeout: 30000}, before);
   check((await countText(b, 'AI在这里')) > before, 'AI retry from the panel works');
+
+  await b.click('#surrenderbtn');
+  await b.waitForFunction(() => document.querySelector('#winner').offsetParent !== null, {timeout: 10000});
+  const winnerText = await text(b, '#winner');
+  check(winnerText.includes('Resistance wins!') || winnerText.includes('Spies win!'), 'surrender ends the game with a winner');
+  check(await b.$eval('#surrenderbtn', el => el.offsetParent === null), 'surrender button hidden after the game');
+  check(await b.$$eval('#names .aidel', els => els.length) === 4, 'AI remove buttons return after the game');
 
   await stopServer(aiServer);
   fake.server.close();

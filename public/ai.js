@@ -146,7 +146,7 @@
       $('#aibtn').hide();
       return;
     }
-    $('#aibtn').show();
+    $('#aibtn').toggle(InRoom());
     var opts = '';
     for (var i = 0; i < models.length; ++i) {
       opts += '<option value="' + EscapeHtml(models[i].id) + '">' + EscapeHtml(models[i].label) + '</option>';
