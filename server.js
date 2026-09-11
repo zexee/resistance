@@ -5,6 +5,12 @@ var io = require('socket.io')(server);
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser')
 var fs = require('fs') // this engine requires the fs module
+function JsLiteral(value) {
+  if (value == undefined || value == '') return 'null';
+  // Escape '<' so a value cannot close the inline <script> tag.
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
 app.engine('ntl', function (filePath, options, callback) { // define the template engine
   fs.readFile(filePath, function (err, content) {
     if (err) return callback(err)
@@ -26,15 +32,19 @@ app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 
 app.get('/', function (req, res) {
   res.render('index', {
-    name: req.cookies.name ? '"' + req.cookies.name + '"': null,
-    room: req.cookies.room ? '"' + req.cookies.room + '"': null})
+    name: JsLiteral(req.cookies.name),
+    room: JsLiteral(req.cookies.room)})
 })
 
 app.post('/setname', function (req, res) {
   var name = req.body.name;
   var room = req.body.room;
-  res.cookie('name', name, {maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true});
-  res.cookie('room', room, {maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true});
+  if (name != undefined) {
+    res.cookie('name', name, {maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true});
+  }
+  if (room != undefined) {
+    res.cookie('room', room, {maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true});
+  }
   res.json({ok:1});
 })
 app.use(express.static(__dirname + '/public'));
@@ -216,6 +226,7 @@ function send_votes(room, socket) {
       data[i] = {'voten': room.votes[i].length};
     }
     data[i]['n'] = param[room.n][i];
+    data[i]['voted'] = room.voters[i];
   }
   var current = {}
   if (room.current_proposal['text'] != undefined) {
@@ -454,7 +465,8 @@ io.on('connect', function(socket) {
   });
 });
 
-server.listen(7777, function() {
+var PORT = process.env.PORT || 7777;
+server.listen(PORT, function() {
   var host = server.address().address
   var port = server.address().port
   console.log("Example app listening at http://%s:%s", host, port)

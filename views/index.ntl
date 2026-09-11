@@ -38,8 +38,27 @@
       var proposalOpen = false;
       var currentVoten = 0;
       var myVoted = -1;
+      function HtmlEscape(s) {
+        return $('<div/>').text(s == undefined ? '' : s).html();
+      }
+      function RawName(name) {
+        if (name == undefined) return 'SOMEONE';
+        try {
+          return decodeURIComponent(name);
+        } catch (e) {
+          return name;
+        }
+      }
+      function DisplayName(name) {
+        return HtmlEscape(RawName(name));
+      }
+      function NamesOfList(list) {
+        var names = [];
+        for (var i in list) names.push(RawName(list[i]));
+        return names.join(', ');
+      }
       function IsLeader() {
-        return started && leader != null && leader == escape(me);
+        return started && leader != null && leader == encodeURIComponent(me);
       }
       function IsProposalMeta(k) {
         return k == 'text' || k == 'who' || k == 'round' || k == 'team' || k == 'auto';
@@ -54,7 +73,7 @@
         winner = data.winner;
         results = data.results;
         missionTeams = data.mission_teams;
-        inTeam = data.mission_team.indexOf(escape(me)) >= 0;
+        inTeam = data.mission_team.indexOf(encodeURIComponent(me)) >= 0;
         if (proposeRound != data.current_round) {
           $('#name_checks input[type=checkbox]').prop('checked', false);
         }
@@ -99,9 +118,20 @@
             $('#' + i).parent().parent().removeClass('bg-success');
             $('#' + i).parent().parent().removeClass('bg-danger');
           }
-          $('#voters' + i).html(missionTeams[i] ? unescape(missionTeams[i].join(', ')) : '');
+          $('#voters' + i).html(missionTeams[i] ? HtmlEscape(NamesOfList(missionTeams[i])) : '');
           $('#voten' + i).html(data[i].n + ' players');
           $('#failneed' + i).html(data.fail_need[i] + ' to fail');
+          if (started && phase == 'mission' && i == proposeRound) {
+            var waiting = [];
+            var voted = {};
+            for (var j in data[i].voted) voted[data[i].voted[j]] = 1;
+            for (var j in missionTeams[i]) {
+              if (voted[missionTeams[i][j]] == undefined) waiting.push(DisplayName(missionTeams[i][j]));
+            }
+            $('#votewait' + i).html(waiting.length ? 'Waiting for: ' + waiting.join(', ') : '');
+          } else {
+            $('#votewait' + i).html('');
+          }
         }
         html = '';
         for (var i in data.proposals) {
@@ -113,10 +143,10 @@
             if (IsProposalMeta(j)) continue;
             ++all;
             if (p[j] == 1) {
-              votes.push(' <span class="label label-success">' + unescape(j) + '</span>');
+              votes.push(' <span class="label label-success">' + DisplayName(j) + '</span>');
               ++yes;
             } else {
-              votes.push(' <span class="label label-danger">' + unescape(j) + '</span>');
+              votes.push(' <span class="label label-danger">' + DisplayName(j) + '</span>');
             }
           }
           if (p.auto) {
@@ -126,25 +156,25 @@
           } else {
             html += '<li class="list-group-item list-group-item-danger">';
           }
-          html += 'Mission ' + (p.round + 1) + (p.auto ? ' (auto-passed)' : '') + ' - ' + unescape(p.who) + ': ' + unescape(p.text) + '<p>' + votes.join('') + '</p></li>';
+          html += 'Mission ' + (p.round + 1) + (p.auto ? ' (auto-passed)' : '') + ' - ' + DisplayName(p.who) + ': ' + DisplayName(p.text) + '<p>' + votes.join('') + '</p></li>';
         }
         $('#proposals').html(html);
         
         html = '';
         if (data.proposal['text'] != undefined) {
           var p = data.proposal;
-          html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + unescape(p.who) + '</span>: <span class="text-primary">' + unescape(p.text) + '</span></h3>'
+          html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + DisplayName(p.who) + '</span>: <span class="text-primary">' + DisplayName(p.text) + '</span></h3>'
           var votes = [];
           var votedNames = {};
           for (var j in p) {
             if (IsProposalMeta(j)) continue;
             votedNames[j] = 1;
-            votes.push('<span class="label label-warning">' + unescape(j) + '</span>');
+            votes.push('<span class="label label-warning">' + DisplayName(j) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
           var waiting = [];
           for (var k in playerNames) {
-            if (votedNames[playerNames[k]] == undefined) waiting.push(unescape(playerNames[k]));
+            if (votedNames[playerNames[k]] == undefined) waiting.push(DisplayName(playerNames[k]));
           }
           if (waiting.length) {
             html += '<p class="text-muted">Waiting for: ' + waiting.join(', ') + '</p>';
@@ -166,7 +196,7 @@
         var html = [];
         for (var i in playerNames) {
           var name = playerNames[i];
-          var item = '<strong class="text-primary">' + unescape(name) + '</strong>';
+          var item = '<strong class="text-primary">' + DisplayName(name) + '</strong>';
           if (started && leader != null && name == leader) {
             item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
           }
@@ -216,7 +246,7 @@
         var canPropose = isLeader && teamSize > 0 && checked == teamSize && winner == null;
         $('#proposebtn').prop('disabled', !canPropose).toggle(isLeader);
         if (!isLeader) {
-          $('#teamhint').html(leader != null ? 'Waiting for ' + unescape(leader) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
+          $('#teamhint').html(leader != null ? 'Waiting for ' + DisplayName(leader) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
         } else if (proposeRound >= 0) {
           $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' players (' + checked + '/' + teamSize + ').');
         } else {
@@ -270,7 +300,7 @@
         var html = '';
         for (var i in data.names) {
           var name = data.names[i];
-          html += '<div class="checkbox"><label><input type="checkbox" value="' + name + '">' + unescape(name) + '</label></div>';
+          html += '<div class="checkbox"><label><input type="checkbox" value="' + HtmlEscape(name) + '">' + DisplayName(name) + '</label></div>';
         }
         $('#name_checks').html(html);
         UpdateButtons();
@@ -281,12 +311,12 @@
       function ChangeName() {
         me = prompt("Please enter your name", me == null ? "Harry Potter" : me);
         if (me == null) return;
-        $.post('/setname', {name: me}, function(data) {
+        $.post('/setname', {name: me, room: room}, function(data) {
           console.log(data);
         });
-        $('#me').html(me);
+        $('#me').html(HtmlEscape(me));
         if (socket != null) {
-          socket.emit('me', {'name': escape(me)});
+          socket.emit('me', {'name': encodeURIComponent(me), 'room': room});
         }
       }
       function Connect() {
@@ -294,11 +324,11 @@
         if (me == null) {
           ChangeName();
         }
-        $('#me').html(me);
+        $('#me').html(HtmlEscape(me));
         socket = io();
         socket.on('connect', function(data) {
           $('#WARNING').html('CONNECTED');
-          socket.emit('me', {'name': escape(me), 'room': room});
+          socket.emit('me', {'name': encodeURIComponent(me), 'room': room});
         });
         socket.on('disconnect', function(data) {
           $('#WARNING').html('DISCONNECTED');
@@ -322,17 +352,17 @@
             if (data.spys.length == 2) {
               msg += 'Your partner is ';
               for (var i in data.spys) {
-                if (unescape(data.spys[i]) == me) continue;
-                msg += unescape(data.spys[i]) + '.';
+                if (RawName(data.spys[i]) == me) continue;
+                msg += RawName(data.spys[i]) + '.';
               }
             } else {
               msg += 'Your partners are ';
               var s = 0;
               for (var i in data.spys) {
-                if (unescape(data.spys[i]) == me) continue;
+                if (RawName(data.spys[i]) == me) continue;
                 if (s == data.spys.length - 2) msg += ' and ';
                 else if (s != 0) msg += ', ';
-                msg += unescape(data.spys[i]);
+                msg += RawName(data.spys[i]);
                 ++s;
               }
               msg += '.';
@@ -346,6 +376,7 @@
       $(document).on('change', '#name_checks input[type=checkbox]', UpdateTeamLimit);
       $(document).ready(Connect);
       function Start() {
+        if (started && winner == null && !confirm('Restart the game?')) return;
         socket.emit('start');
       }
       function Pass(round) {
@@ -436,6 +467,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="0"></span></p>
                 <p>Team: <span class="text-primary" id="voters0"></span></p>
+                <p id="votewait0" class="text-muted"></p>
                 <div><button class="btn btn-success" disabled onclick="Pass(0)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(0)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(0)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
@@ -448,6 +480,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="1"></span></p>
                 <p>Team: <span class="text-primary" id="voters1"></span></p>
+                <p id="votewait1" class="text-muted"></p>
                 <div><button class="btn btn-success" disabled onclick="Pass(1)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(1)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(1)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
@@ -460,6 +493,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="2"></span></p>
                 <p>Team: <span class="text-primary" id="voters2"></span></p>
+                <p id="votewait2" class="text-muted"></p>
                 <div><button class="btn btn-success" disabled onclick="Pass(2)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(2)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(2)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
@@ -472,6 +506,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="3"></span></p>
                 <p>Team: <span class="text-primary" id="voters3"></span></p>
+                <p id="votewait3" class="text-muted"></p>
                 <div><button class="btn btn-success" disabled onclick="Pass(3)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(3)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(3)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>
@@ -484,6 +519,7 @@
               <div class="panel-body">
                 <p>Votes: <span id="4"></span></p>
                 <p>Team: <span class="text-primary" id="voters4"></span></p>
+                <p id="votewait4" class="text-muted"></p>
                 <div><button class="btn btn-success" disabled onclick="Pass(4)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(4)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(4)"><i class="fa fa-undo"></i> Clear</button></div>
               </div>
             </div>

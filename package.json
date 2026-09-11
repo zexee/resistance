@@ -1,7 +1,7 @@
 {
-  "name": "starter",
+  "name": "resistance",
   "version": "1.0.0",
-  "description": "",
+  "description": "Companion scoreboard for the physical board game The Resistance",
   "main": "server.js",
   "dependencies": {
     "body-parser": "^1.18.2",
@@ -9,19 +9,15 @@
     "express": "^4.16.2",
     "socket.io": "^4.8.3"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "puppeteer-core": "^25.10.0",
+    "socket.io-client": "^4.8.3"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test/socket.js",
+    "test:ui": "node test/ui.js",
     "start": "node server.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+ssh://git@gitlab.com/tchng/starter.git"
-  },
   "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://gitlab.com/tchng/starter/issues"
-  },
-  "homepage": "https://gitlab.com/tchng/starter#README"
+  "license": "ISC"
 }
