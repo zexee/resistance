@@ -22,23 +22,30 @@ function Send(room, socket) {
   });
 }
 
-function Setup(socket, io, GetRoom, PlayerId) {
+function Say(io, room, pid, text) {
+  // Server-side sender used by AI players; returns the stored message or null.
+  var t = Trim(ClampText(text));
+  if (t == '') return null;
+  if (room.chat == undefined) room.chat = [];
+  var msg = {
+    pid: pid,
+    text: t,
+    time: Date.now()
+  };
+  room.chat.push(msg);
+  if (room.chat.length > CHAT_KEEP) {
+    room.chat.splice(0, room.chat.length - CHAT_KEEP);
+  }
+  io.to(room.id).emit('chat', {room: room.id, message: msg});
+  return msg;
+}
+
+function Setup(socket, io, GetRoom, PlayerId, OnChat) {
   socket.on('chat', function(data) {
-    var text = Trim(ClampText(data != undefined ? data.text : ''));
-    if (text == '') return;
     var room = GetRoom(socket);
-    if (room.chat == undefined) room.chat = [];
-    var msg = {
-      pid: PlayerId(socket),
-      text: text,
-      time: Date.now()
-    };
-    room.chat.push(msg);
-    if (room.chat.length > CHAT_KEEP) {
-      room.chat.splice(0, room.chat.length - CHAT_KEEP);
-    }
-    io.to(room.id).emit('chat', {room: room.id, message: msg});
+    var msg = Say(io, room, PlayerId(socket), data != undefined ? data.text : '');
+    if (msg != null && OnChat != undefined) OnChat(room, msg);
   });
 }
 
-module.exports = {Send: Send, Setup: Setup};
+module.exports = {Send: Send, Say: Say, Setup: Setup};

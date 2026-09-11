@@ -8,11 +8,11 @@ process.on('exit', () => {
   }
 });
 
-function startServer() {
+function startServer(extraEnv) {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, ['server.js'], {
       cwd: path.join(__dirname, '..'),
-      env: Object.assign({}, process.env, { PORT: '0' }),
+      env: Object.assign({}, process.env, { PORT: '0' }, extraEnv || {}),
       stdio: ['ignore', 'pipe', 'pipe']
     });
     running.push(proc);

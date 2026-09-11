@@ -6,6 +6,7 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser')
 var fs = require('fs') // this engine requires the fs module
 var chat = require('./chat');
+var ai = require('./ai');
 function JsLiteral(value) {
   if (value == undefined || value == '') return 'null';
   // Escape '<' so a value cannot close the inline <script> tag.
@@ -132,6 +133,7 @@ function PlayerPids(room) {
 }
 
 function IsOnline(room, pid) {
+  if (ai.IsAi(room, pid)) return true;
   for (var s in room.sockets) {
     if (PlayerId(room.sockets[s]) == pid) return true;
   }
@@ -152,7 +154,7 @@ function PlayerList(room) {
   if (room.players != undefined && room.n > 0 && room.winner == null) {
     for (var i = 0; i < room.players.length; ++i) {
       var pid = room.players[i];
-      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1});
+      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1, ai: ai.IsAi(room, pid) ? 1 : undefined});
     }
     return list;
   }
@@ -162,7 +164,7 @@ function PlayerList(room) {
     var pid = order[i];
     if (seen[pid] || !IsOnline(room, pid)) continue;
     seen[pid] = 1;
-    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1});
+    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1, ai: ai.IsAi(room, pid) ? 1 : undefined});
   }
   for (var s in room.sockets) {
     var pid = PlayerId(room.sockets[s]);
@@ -190,10 +192,11 @@ function RoomStart(room, n) {
   room.mission_teams = [null, null, null, null, null];
   room.results = [null, null, null, null, null];
   room.winner = null;
+  ai.Reset(room);
 }
 
 function IsProposalMeta(k) {
-  return k == 'text' || k == 'who' || k == 'round' || k == 'team' || k == 'auto';
+  return k == 'text' || k == 'who' || k == 'by' || k == 'round' || k == 'team' || k == 'auto';
 }
 
 function ProposalVotes(room) {
@@ -287,6 +290,77 @@ function ObjLength(obj) {
     ++n;
   }
   return n;
+}
+
+// Shared by the socket handlers and AI players so both follow the same rules.
+function ProposeAction(room, pid, team) {
+  if (room.id == 'Lobby') return false;
+  if (room.n < 5 || room.n > 10) return false;
+  if (room.phase != 'proposal') return false;
+  if (room.players[room.leader] != pid) return false;
+  var round = CurrentRound(room);
+  if (round < 0) return false;
+  if (!Array.isArray(team) || team.length != param[room.n][round]) return false;
+  var picked = {};
+  for (var i in team) {
+    if (picked[team[i]] != undefined || room.players.indexOf(team[i]) < 0) return false;
+    picked[team[i]] = 1;
+  }
+  // Store numbered labels so archived proposals stay readable after departures.
+  var teamNames = [];
+  for (var i in team) {
+    teamNames.push((room.players.indexOf(team[i]) + 1) + '. ' + PlayerName(room, team[i]));
+  }
+  room.current_proposal = {'text': teamNames.join(', '), 'who': (room.players.indexOf(pid) + 1) + '. ' + PlayerName(room, pid), 'by': pid, 'round': round, 'team': team};
+  var auto = false;
+  if (room.rejected >= room.players.length) {
+    // Everyone was rejected once, this proposal passes without a vote.
+    room.current_proposal['auto'] = 1;
+    auto = true;
+    ApproveProposal(room);
+  }
+  ai.OnProposal(room, pid, team, round, auto);
+  return true;
+}
+
+function ProposalVoteAction(room, pid, vote) {
+  if (room.id == 'Lobby') return false;
+  if (room.current_proposal['text'] == undefined) return false;
+  if (room.players.indexOf(pid) < 0) return false;
+  var round = room.current_proposal['round'];
+  room.current_proposal[pid] = vote > 0 ? 1 : -1;
+  var finished = false;
+  var approved = false;
+  if (ProposalVotes(room) == room.n) {
+    FinishProposal(room);
+    finished = true;
+    approved = room.phase == 'mission';
+  }
+  ai.OnProposalVote(room, pid, round, finished, approved);
+  return true;
+}
+
+function MissionVoteAction(room, pid, round, vote) {
+  if (room.id == 'Lobby') return false;
+  if (room.n < 5 || room.n > 10) return false;
+  if (room.phase != 'mission') return false;
+  if (round != CurrentRound(room)) return false;
+  if (room.mission_team.indexOf(pid) < 0) return false;
+  if (room.voted[round] == undefined) room.voted[round] = {};
+  if (room.voted[round][pid] == undefined) {
+    room.votes[round].push(vote > 0 ? 1 : 0);
+    room.voters[round].push(pid);
+    room.voted[round][pid] = vote > 0 ? 1 : 0;
+  }
+  var finished = false;
+  if (room.votes[round].length == param[room.n][round]) {
+    room.votes[round] = Shuffle(room.votes[round]);
+    room.voters[round] = Shuffle(room.voters[round]);
+    FinishMission(room, round);
+    finished = true;
+  }
+  ai.OnMissionVote(room, pid, round, finished);
+  return true;
 }
 
 function send_votes(room, socket) {
@@ -408,14 +482,29 @@ function DeleteEmptyRooms() {
 
 setInterval(DeleteEmptyRooms, CHECK_INTERVAL);
 
+function SendJoinRoom(room) {
+  io.to(room.id).emit('join', {'players': PlayerList(room), 'room': room.id});
+}
+
 function SendJoin(socket) {
-  var room = GetRoom(socket);
-  io.to(socket.myroom).emit('join', {'players': PlayerList(room), 'room': room.id});
+  SendJoinRoom(GetRoom(socket));
 }
 
 io.on('connect', function(socket) {
   console.log('New IO connection.', socket.handshake.address);
-  chat.Setup(socket, io, GetRoom, PlayerId);
+  chat.Setup(socket, io, GetRoom, PlayerId, ai.OnChat);
+  ai.Setup(socket, io, {
+    GetRoom: GetRoom,
+    PlayerId: PlayerId,
+    PlayerList: PlayerList,
+    Param: param,
+    CurrentRound: CurrentRound,
+    ProposeAction: ProposeAction,
+    ProposalVoteAction: ProposalVoteAction,
+    MissionVoteAction: MissionVoteAction,
+    BroadcastJoin: SendJoinRoom,
+    SendVotes: send_votes
+  });
 
   socket.on('disconnect', function() {
     LeaveRoom(socket);
@@ -467,8 +556,9 @@ io.on('connect', function(socket) {
     var list = PlayerList(room);
     for (var i = 0; i < list.length; ++i) {
       roleByPid[list[i].pid] = roles[i];
-      if (roles[i] == 0) spys.push(list[i].name);
+      if (roles[i] == 0) spys.push({pid: list[i].pid, name: list[i].name, number: i + 1});
     }
+    room.roleByPid = roleByPid;
     for (var s in room.sockets) {
       var role = roleByPid[PlayerId(room.sockets[s])];
       room.sockets[s].role = role;
@@ -478,28 +568,15 @@ io.on('connect', function(socket) {
         room.sockets[s].emit('role', {'role': role});
       }
     }
+    ai.OnStart(room);
   });
   socket.on('vote', function(data) {
     var room = GetRoom(socket);
-    if (room.id == 'Lobby') return;
-    if (room.n < 5 || room.n > 10) return;
-    if (room.phase != 'mission') return;
-    if (data.round != CurrentRound(room)) return;
-    var pid = PlayerId(socket);
-    if (room.mission_team.indexOf(pid) < 0) return;
-    console.log('vote', data);
-    if (room.voted[data.round] == undefined) room.voted[data.round] = {};
-    if (room.voted[data.round][pid] == undefined) {
-      room.votes[data.round].push(data.vote);
-      room.voters[data.round].push(pid);
-      room.voted[data.round][pid] = data.vote;
+    if (data == undefined) return;
+    if (MissionVoteAction(room, PlayerId(socket), data.round, data.vote)) {
+      console.log('vote', data);
+      send_votes(room);
     }
-    if (room.votes[data.round].length == param[room.n][data.round]) {
-			room.votes[data.round] = Shuffle(room.votes[data.round]);
-			room.voters[data.round] = Shuffle(room.voters[data.round]);
-      FinishMission(room, data.round);
-    }
-    send_votes(room);
   });
   socket.on('clearvote', function(data) {
     var room = GetRoom(socket);
@@ -516,52 +593,22 @@ io.on('connect', function(socket) {
   });
   socket.on('propose', function(data) {
     var room = GetRoom(socket);
-    if (room.id == 'Lobby') return;
-    if (room.n < 5 || room.n > 10) return;
-    if (room.phase != 'proposal') return;
-    if (room.players[room.leader] != PlayerId(socket)) return;
-    var round = CurrentRound(room);
-    if (round < 0) return;
-    var team = data.team;
-    if (!Array.isArray(team) || team.length != param[room.n][round]) return;
-    var picked = {};
-    for (var i in team) {
-      if (picked[team[i]] != undefined || room.players.indexOf(team[i]) < 0) return;
-      picked[team[i]] = 1;
+    if (data == undefined) return;
+    if (ProposeAction(room, PlayerId(socket), data.team)) {
+      send_votes(room);
     }
-    var teamNames = [];
-    for (var i in team) {
-      teamNames.push(PlayerName(room, team[i]));
-    }
-    room.current_proposal = {'text': teamNames.join(', '), 'who': socket.name, 'round': round, 'team': team};
-    if (room.rejected >= room.players.length) {
-      // Everyone was rejected once, this proposal passes without a vote.
-      room.current_proposal['auto'] = 1;
-      ApproveProposal(room);
-    }
-    send_votes(room);
   });
   socket.on('yes', function(data) {
     var room = GetRoom(socket);
-    if (room.id == 'Lobby') return;
-    if (room.current_proposal['text'] == undefined) return;
-    if (room.players.indexOf(PlayerId(socket)) < 0) return;
-    room.current_proposal[PlayerId(socket)] = 1;
-    if (ProposalVotes(room) == room.n) {
-      FinishProposal(room);
+    if (ProposalVoteAction(room, PlayerId(socket), 1)) {
+      send_votes(room);
     }
-    send_votes(room);
   });
   socket.on('no', function(data) {
     var room = GetRoom(socket);
-    if (room.id == 'Lobby') return;
-    if (room.current_proposal['text'] == undefined) return;
-    if (room.players.indexOf(PlayerId(socket)) < 0) return;
-    room.current_proposal[PlayerId(socket)] = -1;
-    if (ProposalVotes(room) == room.n) {
-      FinishProposal(room);
+    if (ProposalVoteAction(room, PlayerId(socket), -1)) {
+      send_votes(room);
     }
-    send_votes(room);
   });
 });
 

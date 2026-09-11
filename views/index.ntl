@@ -11,8 +11,10 @@
     <link href="3rd/bootstrap.min.css" rel="stylesheet">
     <link href="3rd/bootstrap-theme.min.css" rel="stylesheet">
     <link href="chat.css" rel="stylesheet">
+    <link href="ai.css" rel="stylesheet">
     <script src="3rd/bootstrap.min.js"></script>
     <script src="chat.js"></script>
+    <script src="ai.js"></script>
     <style>
       .label {
         font-size:100%;
@@ -100,7 +102,7 @@
         return started && leader != null && leader == pid;
       }
       function IsProposalMeta(k) {
-        return k == 'text' || k == 'who' || k == 'round' || k == 'team' || k == 'auto';
+        return k == 'text' || k == 'who' || k == 'by' || k == 'round' || k == 'team' || k == 'auto';
       }
       function Fill(data) {
         if (data[0] == undefined) return;
@@ -239,6 +241,9 @@
         for (var i in players) {
           var player = players[i];
           var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '">' + HtmlEscape(PlayerLabel(player)) + '</strong>';
+          if (player.ai) {
+            item += ' <i class="fa fa-microchip text-info" title="AI"></i>';
+          }
           if (started && leader != null && player.pid == leader) {
             item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
           }
@@ -392,6 +397,7 @@
         $('#me').html(HtmlEscape(me));
         socket = io();
         InitChat(socket);
+        InitAi(socket);
         socket.on('connect', function(data) {
           $('#WARNING').html('CONNECTED');
           socket.emit('me', {'name': encodeURIComponent(me), 'room': room, 'pid': pid});
@@ -412,28 +418,16 @@
           myVoted = -1;
           UpdateButtons();
           if (data.role == 0) {
-            var msg = '';
-            if (data.spys.length == 2) {
-              msg += 'Your partner is ';
-              for (var i in data.spys) {
-                if (RawName(data.spys[i]) == me) continue;
-                msg += RawName(data.spys[i]) + '.';
-              }
-            } else {
-              msg += 'Your partners are ';
-              var s = 0;
-              for (var i in data.spys) {
-                if (RawName(data.spys[i]) == me) continue;
-                if (s == data.spys.length - 2) msg += ' and ';
-                else if (s != 0) msg += ', ';
-                msg += RawName(data.spys[i]);
-                ++s;
-              }
-              msg += '.';
+            var partners = [];
+            for (var i in data.spys) {
+              var spy = data.spys[i];
+              if (spy.pid == pid) continue;
+              partners.push(spy.number + '. ' + RawName(spy.name));
             }
-            alert(me + ', you are a SPY. ' + msg);
+            var msg = partners.length == 1 ? 'Your partner is ' + partners[0] + '.' : 'Your partners are ' + partners.join(', ') + '.';
+            alert(LabelOfPid(pid) + ', you are a SPY. ' + msg);
           } else {
-            alert(me + ', you are a RESISTANCE MEMBER.');
+            alert(LabelOfPid(pid) + ', you are a RESISTANCE MEMBER.');
           }
         });
       }

@@ -2,22 +2,25 @@
 
 ## What this is
 
-Real-time companion/scoreboard for the physical board game The Resistance. Roles are dealt and votes are entered manually by players, but the server enforces leader rotation, proposal approval, team-only mission votes, mission results (including the mission-4 two-fail rule), and the first-to-3 winner. Single-file server, all state in memory, no database.
+Real-time companion/scoreboard for the physical board game The Resistance. Roles are dealt and votes are entered manually by players, but the server enforces leader rotation, proposal approval, team-only mission votes, mission results (including the mission-4 two-fail rule), and the first-to-3 winner. Players can add LLM-backed AI players to a room before the game starts. All state is in memory, no database.
 
 ## Commands
 
 - Install: `npm install`
 - Run: `npm start` (port 7777, override with `PORT`)
-- `npm test` runs the socket integration test (spawns its own server on a random port). `npm run test:ui` runs the Chrome/Puppeteer UI test (`CHROME_PATH` overrides the default `/usr/bin/google-chrome`). There is no lint or build tooling.
+- `npm test` runs the socket integration test plus the AI integration test (both spawn their own server on a random port). `npm run test:ai` runs only the AI test; it starts a fake OpenAI-compatible endpoint through `AI_CONFIG`. `npm run test:ui` runs the Chrome/Puppeteer UI test (`CHROME_PATH` overrides the default `/usr/bin/google-chrome`). `npm run test:game` plays a full game with 5 AI players against the real model in `ai.config.json` (manual, paid API); pass a model id and `--ais`, `--timeout`, `--retries` flags. The test copy of the config disables model thinking by default (`--thinking=on` keeps it) so games finish quickly. There is no lint or build tooling.
 
 ## Layout
 
 - `server.js` - Express routes, all Socket.IO handlers, and all game state (`rooms` object). Restarting the server drops every room and game.
 - `views/index.ntl` - the game client (HTML/CSS/JS), served for `/`. Communicates with the server only through Socket.IO events.
-- `chat.js` - server-side per-room chat: stores the last 100 messages in `room.chat` and registers the `chat` handler. `server.js` calls `chat.Setup(socket, io, GetRoom, PlayerId)` on connect and `chat.Send(room, socket)` on join.
+- `chat.js` - server-side per-room chat: stores the last 100 messages in `room.chat` and registers the `chat` handler. `server.js` calls `chat.Setup(socket, io, GetRoom, PlayerId, ai.OnChat)` on connect, `chat.Send(room, socket)` on join, and AI players speak through `chat.Say(io, room, pid, text)`.
+- `ai.js` - server-side AI players: loads `ai.config.json` (override with `AI_CONFIG`), keeps one conversation per AI in `room.ai`, calls OpenAI-compatible `/chat/completions` endpoints, and registers `ai_add`/`ai_remove`/`ai_retry`. `server.js` passes the shared action functions to `ai.Setup` and calls the `OnStart`/`OnProposal`/`OnProposalVote`/`OnMissionVote` hooks from `ProposeAction`/`ProposalVoteAction`/`MissionVoteAction`.
+- `ai.config.example.json` - config template; the real `ai.config.json` is gitignored and holds the API keys. Without a valid config the AI feature is disabled and the client hides its panel.
 - `public/chat.js` / `public/chat.css` - client chat panel injected into the page; `index.ntl` loads them and calls `InitChat(socket)` after creating the socket.
+- `public/ai.js` / `public/ai.css` - client AI panel (add/remove AI, model picker, thinking spinner, error retry) and the floating `#aithinking` waiting indicator; loaded by `index.ntl` and started with `InitAi(socket)`. Never receives an API key.
 - `public/3rd/` - vendored jquery/bootstrap/font-awesome/Socket.IO browser bundles. Server uses socket.io 4.x; when upgrading, copy `dist/socket.io.min.js` from the matching `socket.io-client` version into `public/3rd/`.
-- `test/` - `socket.js` (game flow over real sockets) and `ui.js` (Puppeteer browser flow); both spawn their own server on a random port through `test/helper.js`.
+- `test/` - `socket.js` (game flow over real sockets), `ai.js` (AI flow against a fake OpenAI-compatible server) and `ui.js` (Puppeteer browser flow, including the AI panel); all spawn their own server on a random port through `test/helper.js`.
 
 ## Non-obvious conventions
 
@@ -31,4 +34,5 @@ Real-time companion/scoreboard for the physical board game The Resistance. Roles
 - Only the current leader can `propose`. `room.leader` is an index into `room.players` (random first leader) and advances after every proposal outcome. If `room.rejected` reaches the player count, the next proposal auto-passes without a vote (`auto:1` on the archived proposal).
 - `room.phase` is `proposal`, `mission`, or `ended`. `FinishProposal` (server.js:180) applies a strict yes majority: approval sets `mission` and records `room.mission_team`/`room.mission_teams`, rejection increments `room.rejected`. `FinishMission` (server.js:199) records `room.results` (mission 4 needs two fails at 7+ players), sets `room.winner` at 3 wins, and returns to `proposal` or `ended`. `propose` is dropped unless the phase is `proposal`, `yes`/`no` unless a proposal is open, and `vote`/`clearvote` unless the voter is in `room.mission_team`.
 - Client button states and phase visibility are centralized in `UpdateButtons`/`UpdateVisibility` (views/index.ntl): the proposal box shows only in the proposal phase, and non-leaders get the checkbox list and Propose button hidden entirely (they only see the waiting hint). Mission cards are all visible once the game starts (titles carry the team sizes), but only team members of the current mission see Pass/Fail/Clear during the mission phase. A winner banner replaces the proposal box when `winner` is set. Before the game starts only Start is enabled (needs 5-10 players).
+- AI players live in `room.ai` (`order`, `byPid`) and are ordinary pids in `room.order`/`room.players`/`room.names`, so `PlayerList`/`IsOnline` count them and mark roster entries with `ai:1`. They are added/removed only before a game starts or after it ends, and are always online. Each AI keeps a full conversation (`messages`); every public event is appended as one JSON line using 1-based player numbers (`actor`, `mission`, `result`), never names, and the model is only called when that AI has to act (propose, yes/no, pass/fail, chat). The LLM must answer with JSON; timeouts or invalid output emit `ai_error` and wait for a human `ai_retry` instead of falling back automatically. Chat rounds are debounced and answered in `room.ai.order`; an AI may stay silent. Resistance AIs that output `fail` are coerced to `pass`. A model entry may carry a `params` object that is merged into the request body (e.g. `{"thinking":{"type":"disabled"}}` for reasoning models); `max_tokens`/`timeout_ms` must be large enough when thinking is on. The client shows a floating `#aithinking` indicator from `ai_thinking`/`ai_state` events.
 - Commit messages in this repo start with `* ` (e.g. `* page change`).

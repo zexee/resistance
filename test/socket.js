@@ -171,7 +171,7 @@ async function castMission(clients, failPids) {
 
   l1.s.emit('propose', { team: [P5[0], P5[1]] });
   await wait(200);
-  check(v(c).proposal.text === 'Alice, Bob', 'leader proposal accepted');
+  check(v(c).proposal.text === '1. Alice, 2. Bob', 'leader proposal accepted');
   check(v(c).proposal.team.length === 2, 'proposal carries pid team');
   check(v(c).phase === 'proposal', 'phase proposal while voting');
 

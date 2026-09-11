@@ -1,0 +1,21 @@
+{
+  "timeout_ms": 30000,
+  "models": [
+    {
+      "id": "gpt-4o",
+      "label": "GPT-4o",
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "sk-REPLACE-ME",
+      "model": "gpt-4o",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    {
+      "id": "local",
+      "label": "Local",
+      "base_url": "http://localhost:11434/v1",
+      "api_key": "ollama",
+      "model": "qwen2.5:14b"
+    }
+  ]
+}

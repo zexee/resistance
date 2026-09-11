@@ -14,7 +14,9 @@
     "socket.io-client": "^4.8.3"
   },
   "scripts": {
-    "test": "node test/socket.js",
+    "test": "node test/socket.js && node test/ai.js",
+    "test:ai": "node test/ai.js",
+    "test:game": "node test/ai_game.js",
     "test:ui": "node test/ui.js",
     "start": "node server.js"
   },

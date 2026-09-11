@@ -1,5 +1,9 @@
 const puppeteer = require('puppeteer-core');
 const { startServer, stopServer } = require('./helper');
+const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const NAMES = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve'];
 const CHROME = process.env.CHROME_PATH || '/usr/bin/google-chrome';
@@ -18,6 +22,50 @@ function check(cond, msg) {
 }
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// Minimal OpenAI-compatible endpoint for the AI panel checks.
+function startFakeLlm() {
+  const state = { mode: 'auto', delay: 0 };
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      const reply = () => {
+        if (state.mode === 'garbage') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'not json' } }] }));
+          return;
+        }
+        let content = JSON.stringify({ action: 'chat', text: 'AI在这里' });
+        try {
+          const parsed = JSON.parse(body || '{}');
+          const messages = parsed.messages || [];
+          const last = messages.length ? String(messages[messages.length - 1].content) : '';
+          if (last.indexOf('作为领袖提议') >= 0) {
+            const m = last.match(/需要恰好 (\d+)/);
+            const size = m ? Number(m[1]) : 2;
+            const team = [];
+            for (let i = 1; i <= size; i++) team.push(i);
+            content = JSON.stringify({ action: 'propose', team });
+          } else if (last.indexOf('提案投票') >= 0) {
+            content = JSON.stringify({ action: 'vote_proposal', vote: 'yes' });
+          } else if (last.indexOf('个任务的队员') >= 0) {
+            content = JSON.stringify({ action: 'vote_mission', vote: 'pass' });
+          }
+        } catch (e) {}
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content } }] }));
+      };
+      if (state.delay > 0) setTimeout(reply, state.delay);
+      else reply();
+    });
+  });
+  return new Promise(resolve => server.listen(0, () => resolve({ server, state, port: server.address().port })));
+}
+
+const countText = (page, text) => page.evaluate(t => {
+  return (document.querySelector('#chatlog').textContent.match(new RegExp(t, 'g')) || []).length;
+}, text);
 
 async function makePage(browser, url, name, room) {
   const context = await browser.createBrowserContext();
@@ -246,6 +294,7 @@ async function castMission(pages, round, failNames) {
   await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('Mission 1'));
   check(!(await disabled(a, '#yesbtn')), 'yes enabled while proposal open');
   check((await text(a, '#proposal')).includes('Waiting for'), 'proposal shows who still has to vote');
+  check((await text(a, '#proposal')).includes('1. Alice') && (await text(a, '#proposal')).includes('2. Bob'), 'proposal shows player numbers');
 
   await voteProposal(pages, true);
   await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
@@ -302,6 +351,88 @@ async function castMission(pages, round, failNames) {
   check((await text(a, '#winner')).includes('Resistance wins!'), 'winner banner shows resistance');
   check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden after win');
   check(await a.$eval('#prestart', el => el.offsetParent === null), 'waiting hint stays hidden after win');
+
+  // ---- AI panel ----
+  const fake = await startFakeLlm();
+  const cfgPath = path.join(os.tmpdir(), 'resistance-ui-ai-' + process.pid + '.json');
+  fs.writeFileSync(cfgPath, JSON.stringify({
+    timeout_ms: 5000,
+    models: [{ id: 'fake', label: 'Fake', base_url: 'http://localhost:' + fake.port + '/v1', api_key: 'x', model: 'fake-model' }]
+  }));
+  const aiServer = await startServer({ AI_CONFIG: cfgPath });
+  const b = await makePage(browser, 'http://localhost:' + aiServer.port, 'AiHost');
+  check(await b.$eval('#aibtn', el => el.offsetParent !== null), 'AI button visible with a config');
+  await b.click('#aibtn');
+  await b.waitForFunction(() => document.querySelector('#aimodal').classList.contains('in'));
+  check(await b.$eval('#aimodal', el => getComputedStyle(el).display !== 'none'), 'AI modal opens');
+  const modelOptions = await b.$eval('#aimodel', el => Array.from(el.options).map(o => o.textContent));
+  check(modelOptions.length === 1 && modelOptions[0] === 'Fake', 'AI modal lists configured models');
+  check((await text(b, '#aihint')).includes('Join a room'), 'AI modal hints to join a room in the lobby');
+  await b.$eval('#aimodal .modal-footer button', el => el.click());
+  await b.waitForFunction(() => !document.querySelector('.modal-backdrop'));
+
+  await b.click('nav button[onclick="CreateRoom();"]');
+  await b.waitForFunction(() => document.querySelector('#room').textContent !== 'Lobby' && document.querySelector('#room').textContent !== '');
+  await b.click('#aibtn');
+  await b.waitForFunction(() => document.querySelector('#aimodal').classList.contains('in'));
+  for (let i = 0; i < 4; i++) {
+    await b.click('#aiaddbtn');
+    await wait(150);
+  }
+  await b.waitForFunction(() => document.querySelector('#joined').textContent === '5');
+  const aiNames = await text(b, '#names');
+  check(aiNames.includes('Fake') && aiNames.includes('Fake-A') && aiNames.includes('Fake-B') && aiNames.includes('Fake-C'), 'AI players added with model-name suffixes');
+  check((await b.$eval('#names', el => el.innerHTML)).includes('fa-microchip'), 'AI players show a microchip icon');
+  check((await b.$eval('#names', el => el.textContent)).includes('5. '), 'AI players get roster numbers');
+
+  await b.click('.airemove');
+  await b.waitForFunction(() => document.querySelector('#joined').textContent === '4');
+  check((await b.$eval('#joined', el => el.textContent)) === '4', 'AI removed through the panel');
+  await b.click('#aiaddbtn');
+  await b.waitForFunction(() => document.querySelector('#joined').textContent === '5');
+  await b.$eval('#aimodal .modal-footer button', el => el.click());
+  await b.waitForFunction(() => !document.querySelector('.modal-backdrop'));
+
+  // chat before the game starts must not reach the model
+  await b.type('#chatinput', '开局前聊天');
+  await b.click('#chatsend');
+  await wait(3500);
+  check(!(await text(b, '#chatlog')).includes('AI在这里'), 'pre-game chat gets no AI reply');
+
+  await b.click('#startbtn');
+  await b.waitForFunction(() => document.querySelector('#proposalbox').offsetParent !== null);
+
+  fake.state.delay = 1500;
+  await b.type('#chatinput', '你们好');
+  await b.click('#chatsend');
+  await b.waitForFunction(() => {
+    const el = document.querySelector('#aithinking');
+    return el != null && el.offsetWidth > 0 && el.textContent.indexOf('AI thinking') >= 0;
+  }, {timeout: 15000});
+  check(await b.$eval('#aithinking', el => el.offsetWidth > 0), 'AI thinking indicator shown while waiting');
+  await b.waitForFunction(() => document.querySelector('#chatlog').textContent.includes('AI在这里'), {timeout: 30000});
+  fake.state.delay = 0;
+  check((await text(b, '#chatlog')).includes('AI在这里'), 'AI chat reply appears in the chat panel');
+  await b.waitForFunction(() => {
+    const el = document.querySelector('#aithinking');
+    return el != null && el.offsetWidth === 0;
+  }, {timeout: 60000});
+  check(await b.$eval('#aithinking', el => el.offsetWidth === 0), 'AI thinking indicator hidden when idle');
+
+  fake.state.mode = 'garbage';
+  const before = await countText(b, 'AI在这里');
+  await b.type('#chatinput', '还在吗');
+  await b.click('#chatsend');
+  await b.waitForSelector('#aialerts .alert-danger .airetry', {visible: true, timeout: 20000});
+  check(await b.$eval('#aialerts .alert-danger', el => el.offsetParent !== null), 'AI error banner shown with retry');
+  fake.state.mode = 'auto';
+  await b.evaluate(() => { document.querySelectorAll('#aialerts .airetry').forEach(el => el.click()); });
+  await b.waitForFunction(n => (document.querySelector('#chatlog').textContent.match(/AI在这里/g) || []).length > n, {timeout: 30000}, before);
+  check((await countText(b, 'AI在这里')) > before, 'AI retry from the panel works');
+
+  await stopServer(aiServer);
+  fake.server.close();
+  try { fs.unlinkSync(cfgPath); } catch (e) {}
 
   await browser.close();
   await stopServer(server);
