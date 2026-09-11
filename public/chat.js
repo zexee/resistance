@@ -34,7 +34,7 @@
   function SetRoom(room) {
     if (room == null) return;
     chatRoom = room;
-    $('#chatroom').text('- ' + room);
+    $('#chatroom').text('- ' + (room == 'Lobby' ? '大厅' : room));
   }
 
   function CachePlayers(list) {
@@ -57,7 +57,7 @@
         if (player != null) return PlayerLabel(player);
       }
     }
-    return 'SOMEONE';
+    return '某人';
   }
 
   function MessageHtml(msg) {
@@ -108,7 +108,7 @@
     $('body').append(
       '<div id="chatpanel">' +
         '<div id="chatheader">' +
-          '<i class="fa fa-comments"></i> Chat <span id="chatroom" class="text-muted"></span> ' +
+          '<i class="fa fa-comments"></i> 聊天 <span id="chatroom" class="text-muted"></span> ' +
           '<span id="chatunread" class="label label-danger" style="display:none">0</span>' +
           '<button type="button" id="chattoggle" class="btn btn-xs btn-default pull-right">' +
             '<i class="fa fa-chevron-down"></i>' +
@@ -117,7 +117,7 @@
         '<div id="chatbody">' +
           '<div id="chatlog"></div>' +
           '<div id="chatsendrow" class="input-group input-group-sm">' +
-            '<input type="text" id="chatinput" class="form-control" maxlength="200" placeholder="Say something...">' +
+            '<input type="text" id="chatinput" class="form-control" maxlength="200" placeholder="说点什么……">' +
             '<span class="input-group-btn">' +
               '<button type="button" id="chatsend" class="btn btn-primary"><i class="fa fa-paper-plane"></i></button>' +
             '</span>' +

@@ -75,7 +75,7 @@ async function makePage(browser, url, name, room) {
   await page.setCookie({ name: 'name', value: name, domain: 'localhost', path: '/' });
   if (room) await page.setCookie({ name: 'room', value: room, domain: 'localhost', path: '/' });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
+  await page.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('已连接'));
   return page;
 }
 
@@ -161,8 +161,8 @@ async function castMission(pages, round, failNames) {
   let anonDialog = null;
   anon.on('dialog', d => { anonDialog = d.message(); d.dismiss(); });
   await anon.goto(url, { waitUntil: 'domcontentloaded' });
-  await anon.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
-  check(anonDialog === 'Input your name', 'first prompt asks for a name');
+  await anon.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('已连接'));
+  check(anonDialog === '请输入你的名字', 'first prompt asks for a name');
   check((await anon.evaluate(() => me)) === 'Harry Potter', 'dismissed name prompt falls back to Harry Potter');
   check((await anon.$eval('#me', el => el.textContent)) === 'Harry Potter', 'default name shown in the navbar');
   check((await anon.$eval('#names', el => el.textContent)).includes('Harry Potter'), 'default name shown in the roster');
@@ -170,9 +170,9 @@ async function castMission(pages, round, failNames) {
 
   const a = await makePage(browser, url, NAMES[0]);
   check(await a.$eval('#startbtn', el => el.offsetParent === null), 'start button hidden in lobby');
-  await a.waitForFunction(() => document.querySelector('#chatroom').textContent.includes('Lobby'));
-  check((await text(a, '#chatroom')).includes('Lobby'), 'chat title shows the lobby');
-  check((await text(a, '#lobbyrules')).includes('strict majority'), 'lobby shows game rules');
+  await a.waitForFunction(() => document.querySelector('#chatroom').textContent.includes('大厅'));
+  check((await text(a, '#chatroom')).includes('大厅'), 'chat title shows the lobby');
+  check((await text(a, '#lobbyrules')).includes('严格多数'), 'lobby shows game rules');
   await a.click('button[data-target="#rules-modal"]');
   await a.waitForFunction(() => document.querySelector('#rules-modal').classList.contains('in'));
   check(await a.$eval('#rules-modal', el => getComputedStyle(el).display !== 'none'), 'rules modal opens');
@@ -182,10 +182,10 @@ async function castMission(pages, round, failNames) {
   await a.waitForFunction(() => !document.querySelector('.modal-backdrop'));
   const pidBefore = await a.evaluate(() => pid);
   await a.reload({ waitUntil: 'domcontentloaded' });
-  await a.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
+  await a.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('已连接'));
   check(await a.evaluate(() => pid) === pidBefore, 'pid survives a reload via cookie');
   await a.click('nav button[onclick="CreateRoom();"]');
-  await a.waitForFunction(() => document.querySelector('#room').textContent !== 'Lobby' && document.querySelector('#room').textContent !== '');
+  await a.waitForFunction(() => document.querySelector('#room').textContent !== '大厅' && document.querySelector('#room').textContent !== '');
   const room = await text(a, '#room');
   const pages = [a];
   for (let i = 1; i < 5; i++) pages.push(await makePage(browser, url, NAMES[i], room));
@@ -222,7 +222,7 @@ async function castMission(pages, round, failNames) {
   check(!(await a.$eval('#chatpanel', el => el.classList.contains('collapsed'))), 'chat panel expands');
   check(await a.$eval('#chatunread', el => el.offsetParent === null), 'unread badge cleared on expand');
   await pages[2].reload({ waitUntil: 'domcontentloaded' });
-  await pages[2].waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
+  await pages[2].waitForFunction(() => document.querySelector('#WARNING').textContent.includes('已连接'));
   await pages[2].waitForFunction(() => document.querySelector('#chatlog').textContent.includes('hello everyone'));
   check((await text(pages[2], '#chatlog')).includes('hello everyone'), 'chat history survives a reload');
   // Keep the fixed panel from covering mission buttons during the game flow.
@@ -242,12 +242,12 @@ async function castMission(pages, round, failNames) {
   for (let i = 0; i < 5; i++) {
     check(await a.$eval('#missionbox' + i, el => el.offsetParent !== null), 'mission ' + (i + 1) + ' card visible after start');
   }
-  check((await text(a, '#voten0')).includes('2 players'), 'mission 1 card shows team size');
-  check((await text(a, '#failneed0')).includes('1 to fail'), 'mission 1 card shows fail threshold');
-  check((await text(a, '#voten1')).includes('3 players'), 'mission 2 card shows team size');
-  check((await text(a, '#failneed3')).includes('1 to fail'), 'mission 4 card shows fail threshold');
+  check((await text(a, '#voten0')).includes('2 人'), 'mission 1 card shows team size');
+  check((await text(a, '#failneed0')).includes('失败需 1 票'), 'mission 1 card shows fail threshold');
+  check((await text(a, '#voten1')).includes('3 人'), 'mission 2 card shows team size');
+  check((await text(a, '#failneed3')).includes('失败需 1 票'), 'mission 4 card shows fail threshold');
   check(await a.$eval('button[onclick="Pass(0)"]', el => el.offsetParent === null), 'no pass buttons during proposal phase');
-  check((await text(a, '#score')).includes('Resistance 0') && (await text(a, '#score')).includes('Spies 0'), 'score starts at 0-0');
+  check((await text(a, '#score')).includes('任务成功 0') && (await text(a, '#score')).includes('任务失败 0'), 'score starts at 0-0');
   const startFont = await a.$eval('#startbtn', el => getComputedStyle(el).fontSize);
   check(await a.$eval('#score .label', el => getComputedStyle(el).fontSize) === startFont, 'score labels match start button font size');
   check((await text(a, '#rejectinfo')).includes('0/5'), 'reject counter shown to everyone');
@@ -258,7 +258,7 @@ async function castMission(pages, round, failNames) {
   const leader = await findLeader(pages);
   check(leader !== null, 'one page shows the propose button');
   const leaderName = await text(leader, '#me');
-  check((await text(leader, '#teamhint')).includes('You are the leader'), 'leader sees own hint');
+  check((await text(leader, '#teamhint')).includes('你是领袖'), 'leader sees own hint');
   check(await visible(leader, '#name_checks'), 'leader sees checkboxes');
   check((await text(leader, '#name_checks')).includes('1. '), 'player numbers shown in the selection list');
   for (const p of pages) {
@@ -267,7 +267,7 @@ async function castMission(pages, round, failNames) {
     check(!(await visible(p, '#proposebtn')), 'non-leader has no propose button');
     check(await p.$eval('#name_checks', el => el.offsetParent === null), 'non-leader checkboxes hidden');
     const hint = await text(p, '#teamhint');
-    check(hint.includes('Waiting for') && hint.includes(leaderName), 'non-leader hint names the leader');
+    check(hint.includes('等待') && hint.includes(leaderName), 'non-leader hint names the leader');
   }
 
   // restart asks for confirmation
@@ -294,9 +294,9 @@ async function castMission(pages, round, failNames) {
   await clickBox(leader, NAMES[1]);
   check(!(await disabled(leader, '#proposebtn')), 'propose enabled with exact team size');
   await leader.click('#proposebtn');
-  await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('Mission 1'));
+  await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('任务 1'));
   check(!(await disabled(a, '#yesbtn')), 'yes enabled while proposal open');
-  check((await text(a, '#proposal')).includes('Waiting for'), 'proposal shows who still has to vote');
+  check((await text(a, '#proposal')).includes('等待投票'), 'proposal shows who still has to vote');
   check((await text(a, '#proposal')).includes('1. Alice') && (await text(a, '#proposal')).includes('2. Bob'), 'proposal shows player numbers');
 
   await voteProposal(pages, true);
@@ -319,39 +319,39 @@ async function castMission(pages, round, failNames) {
   const first = pages[NAMES.indexOf(team[0])];
   await waitVoteButton(first, 0);
   await first.click('button[onclick="Pass(0)"]');
-  await a.waitForFunction(() => document.querySelector('#votewait0').textContent.includes('Waiting for'));
+  await a.waitForFunction(() => document.querySelector('#votewait0').textContent.includes('等待投票'));
   check((await text(a, '#votewait0')).includes(team[1]), 'mission waiting list names the remaining voter');
   const rest = pages[NAMES.indexOf(team[1])];
   await waitVoteButton(rest, 0);
   await rest.click('button[onclick="Pass(0)"]');
 
-  await a.waitForFunction(() => document.querySelector('#teamhint').textContent.includes('mission 2'));
+  await a.waitForFunction(() => document.querySelector('#teamhint').textContent.includes('任务 2'));
   check(await a.$eval('#missionbox0', el => el.offsetParent !== null), 'mission 1 result stays visible');
   check((await a.$eval('#missionbox0 .panel', el => el.className)).includes('panel-success'), 'mission 1 panel is green');
   check(await a.$eval('#proposalbox', el => el.offsetParent !== null), 'proposal box back for mission 2');
   check(await a.$eval('button[onclick="Pass(0)"]', el => el.offsetParent === null), 'mission 1 buttons hidden after completion');
-  check((await text(a, '#score')).includes('Resistance 1'), 'score updates after mission 1');
+  check((await text(a, '#score')).includes('任务成功 1'), 'score updates after mission 1');
 
   // mission 2: size 3
   const leader2 = await findLeader(pages);
   check(leader2 !== null, 'leader for mission 2 found');
   await selectAndPropose(leader2, [NAMES[0], NAMES[1], NAMES[2]]);
-  await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('Mission 2'));
+  await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('任务 2'));
   await voteProposal(pages, true);
   await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
   await castMission(pages, 1, []);
-  await a.waitForFunction(() => document.querySelector('#teamhint').textContent.includes('mission 3'));
+  await a.waitForFunction(() => document.querySelector('#teamhint').textContent.includes('任务 3'));
 
   // mission 3: size 2 -> resistance wins
   const leader3 = await findLeader(pages);
   await selectAndPropose(leader3, [NAMES[0], NAMES[1]]);
-  await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('Mission 3'));
+  await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('任务 3'));
   await voteProposal(pages, true);
   await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
   await castMission(pages, 2, []);
 
   await a.waitForFunction(() => document.querySelector('#winner').offsetParent !== null);
-  check((await text(a, '#winner')).includes('Resistance wins!'), 'winner banner shows resistance');
+  check((await text(a, '#winner')).includes('抵抗组织获胜！'), 'winner banner shows resistance');
   check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden after win');
   check(await a.$eval('#prestart', el => el.offsetParent === null), 'waiting hint stays hidden after win');
 
@@ -366,7 +366,7 @@ async function castMission(pages, round, failNames) {
   const b = await makePage(browser, 'http://localhost:' + aiServer.port, 'AiHost');
   check(await b.$eval('#aibtn', el => el.offsetParent === null), 'AI button hidden outside a room');
   const navButtons = await b.$$eval('.navbar-collapse button', els => els.map(el => el.textContent.trim()));
-  check(navButtons[navButtons.length - 1].includes('Rule'), 'Rule button stays last in the navbar');
+  check(navButtons[navButtons.length - 1].includes('规则'), 'Rule button stays last in the navbar');
   const ruleGap = await b.evaluate(() => {
     const rule = document.querySelector('.navbar-collapse button[data-target="#rules-modal"]').getBoundingClientRect();
     return document.querySelector('.navbar').getBoundingClientRect().right - rule.right;
@@ -374,9 +374,9 @@ async function castMission(pages, round, failNames) {
   check(ruleGap < 40, 'Rule button is at the right end of the navbar');
 
   await b.click('nav button[onclick="CreateRoom();"]');
-  await b.waitForFunction(() => document.querySelector('#room').textContent !== 'Lobby' && document.querySelector('#room').textContent !== '');
+  await b.waitForFunction(() => document.querySelector('#room').textContent !== '大厅' && document.querySelector('#room').textContent !== '');
   await b.waitForFunction(() => document.querySelector('#aibtn').offsetParent !== null);
-  check((await text(b, '#aibtn')).includes('Add AI'), 'AI button labelled Add AI');
+  check((await text(b, '#aibtn')).includes('添加 AI'), 'AI button labelled Add AI');
   await b.click('#aibtn');
   await b.waitForFunction(() => document.querySelector('#aimodal').classList.contains('in'));
   check(await b.$eval('#aimodal', el => getComputedStyle(el).display !== 'none'), 'AI modal opens');
@@ -428,14 +428,14 @@ async function castMission(pages, round, failNames) {
     boxes[1].click();
     document.querySelector('#proposebtn').click();
   });
-  await b.waitForFunction(() => document.querySelector('#proposal').textContent.includes('Waiting for: 1. AiHost'), {timeout: 20000});
+  await b.waitForFunction(() => document.querySelector('#proposal').textContent.includes('等待投票：1. AiHost'), {timeout: 20000});
 
   fake.state.delay = 1500;
   await b.type('#chatinput', '你们好');
   await b.click('#chatsend');
   await b.waitForFunction(() => {
     const el = document.querySelector('#aithinking');
-    return el != null && el.offsetWidth > 0 && el.textContent.indexOf('AI thinking') >= 0;
+    return el != null && el.offsetWidth > 0 && el.textContent.indexOf('AI 思考中') >= 0;
   }, {timeout: 15000});
   check(await b.$eval('#aithinking', el => el.offsetWidth > 0), 'AI thinking indicator shown while waiting');
   await b.waitForFunction(() => document.querySelector('#chatlog').textContent.includes('AI在这里'), {timeout: 30000});
@@ -467,7 +467,7 @@ async function castMission(pages, round, failNames) {
   await b.click('#surrenderbtn');
   await b.waitForFunction(() => document.querySelector('#winner').offsetParent !== null, {timeout: 10000});
   const winnerText = await text(b, '#winner');
-  check(winnerText.includes('Resistance wins!') || winnerText.includes('Spies win!'), 'surrender ends the game with a winner');
+  check(winnerText.includes('抵抗组织获胜！') || winnerText.includes('间谍获胜！'), 'surrender ends the game with a winner');
   check(await b.$eval('#surrenderbtn', el => el.offsetParent === null), 'surrender button hidden after the game');
   check(await b.$$eval('#names .aidel', els => els.length) === 4, 'AI remove buttons return after the game');
 

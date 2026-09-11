@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no"/>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<title>Resistance</title>
+		<title>抵抗组织</title>
     <script src="3rd/jquery.min.js"></script>
     <script src="3rd/socket.io.min.js"></script>
     <link href="3rd/font-awesome.min.css" rel="stylesheet">
@@ -78,7 +78,7 @@
         return player == null ? null : player.name;
       }
       function RawName(name) {
-        if (name == undefined) return 'SOMEONE';
+        if (name == undefined) return '某人';
         try {
           return decodeURIComponent(name);
         } catch (e) {
@@ -86,7 +86,7 @@
         }
       }
       function PlayerLabel(player) {
-        if (player == null) return 'SOMEONE';
+        if (player == null) return '某人';
         return (player.number != undefined ? player.number + '. ' : '') + RawName(player.name);
       }
       function LabelOfPid(p) {
@@ -101,6 +101,10 @@
       }
       function DisplayName(name) {
         return HtmlEscape(RawName(name));
+      }
+      function RoomLabel(r) {
+        // 'Lobby' is an internal room id; everything else is a room number shown as-is.
+        return r == 'Lobby' ? '大厅' : r;
       }
       function IsLeader() {
         return started && leader != null && leader == pid;
@@ -133,7 +137,7 @@
           $('#reconsider').hide();
         }
         $('#playern').html(data.n);
-        $('#room').html(data.room);
+        $('#room').html(RoomLabel(data.room));
         if (data.room == 'Lobby') {
           $('#gamepad').hide();
           $('#gameinstruction').show();
@@ -147,8 +151,8 @@
             var html = '';
             for (var j in data[i].votes) {
               var vote = data[i].votes[j];
-              if (vote == 1) html += ' <span class="label label-success">Pass</span>';
-              else html += ' <span class="label label-danger">Fail</span>';
+              if (vote == 1) html += ' <span class="label label-success">成功</span>';
+              else html += ' <span class="label label-danger">失败</span>';
             }
             if (results[i] == 1) {
               $('#' + i).parent().parent().parent().removeClass('panel-info');
@@ -169,8 +173,8 @@
             $('#' + i).parent().parent().removeClass('bg-danger');
           }
           $('#voters' + i).html(missionTeams[i] ? HtmlEscape(NamesOfPids(missionTeams[i])) : '');
-          $('#voten' + i).html(data[i].n + ' players');
-          $('#failneed' + i).html(data.fail_need[i] + ' to fail');
+          $('#voten' + i).html(data[i].n + ' 人');
+          $('#failneed' + i).html('失败需 ' + data.fail_need[i] + ' 票');
           if (started && phase == 'mission' && i == proposeRound) {
             var waiting = [];
             var votedPids = {};
@@ -180,7 +184,7 @@
                 waiting.push(HtmlEscape(LabelOfPid(missionTeams[i][j])));
               }
             }
-            $('#votewait' + i).html(waiting.length ? 'Waiting for: ' + waiting.join(', ') : '');
+            $('#votewait' + i).html(waiting.length ? '等待投票：' + waiting.join('、') : '');
           } else {
             $('#votewait' + i).html('');
           }
@@ -208,14 +212,14 @@
           } else {
             html += '<li class="list-group-item list-group-item-danger">';
           }
-          html += 'Mission ' + (p.round + 1) + (p.auto ? ' (auto-passed)' : '') + ' - ' + DisplayName(p.who) + ': ' + DisplayName(p.text) + '<p>' + votes.join('') + '</p></li>';
+          html += '任务 ' + (p.round + 1) + (p.auto ? '（自动通过）' : '') + ' · ' + DisplayName(p.who) + ' 提议：' + DisplayName(p.text) + '<p>' + votes.join('') + '</p></li>';
         }
         $('#proposals').html(html);
         
         html = '';
         if (data.proposal['text'] != undefined) {
           var p = data.proposal;
-          html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + DisplayName(p.who) + '</span>: <span class="text-primary">' + DisplayName(p.text) + '</span></h3>'
+          html += '<h3>任务 ' + (p.round + 1) + '：<span style="font-weight:bold">' + DisplayName(p.who) + '</span> 提议：<span class="text-primary">' + DisplayName(p.text) + '</span></h3>'
           var votes = [];
           var votedPids = {};
           for (var j in p) {
@@ -229,7 +233,7 @@
             if (votedPids[players[k].pid] == undefined) waiting.push(HtmlEscape(PlayerLabel(players[k])));
           }
           if (waiting.length) {
-            html += '<p class="text-muted">Waiting for: ' + waiting.join(', ') + '</p>';
+            html += '<p class="text-muted">等待投票：' + waiting.join('、') + '</p>';
           }
         }
         $('#proposal').html(html);
@@ -253,14 +257,14 @@
           if (player.ai) {
             item += ' <i class="fa fa-microchip text-info"' + title + '></i>';
             if (!started || winner != null) {
-              item += ' <button type="button" class="btn btn-xs btn-danger aidel" data-pid="' + AttrEscape(player.pid) + '" title="Remove AI"><i class="fa fa-times"></i></button>';
+              item += ' <button type="button" class="btn btn-xs btn-danger aidel" data-pid="' + AttrEscape(player.pid) + '" title="移除 AI"><i class="fa fa-times"></i></button>';
             }
           }
           if (started && leader != null && player.pid == leader) {
-            item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
+            item += ' <i class="fa fa-star text-warning" title="领袖"></i>';
           }
           if (player.online === false) {
-            item += ' <i class="fa fa-chain-broken" title="Disconnected"></i>';
+            item += ' <i class="fa fa-chain-broken" title="已断开"></i>';
           }
           html.push(item);
         }
@@ -272,8 +276,8 @@
         $('#prestart').toggle(!started);
         $('#surrenderbtn').toggle(started && winner == null);
         $('#winner').toggle(winner != null);
-        if (winner == 'resistance') $('#winner').html('<h3><span class="label label-success">Resistance wins!</span></h3>');
-        else if (winner == 'spies') $('#winner').html('<h3><span class="label label-danger">Spies win!</span></h3>');
+        if (winner == 'resistance') $('#winner').html('<h3><span class="label label-success">抵抗组织获胜！</span></h3>');
+        else if (winner == 'spies') $('#winner').html('<h3><span class="label label-danger">间谍获胜！</span></h3>');
         if (started) {
           var resistance = 0;
           var spies = 0;
@@ -281,7 +285,7 @@
             if (results[i] == 1) ++resistance;
             else if (results[i] == 0) ++spies;
           }
-          $('#score').html(' <span class="label label-success label-small">Resistance ' + resistance + '</span> <span class="label label-danger label-small">Spies ' + spies + '</span>');
+          $('#score').html(' <span class="label label-success label-small">任务成功 ' + resistance + '</span> <span class="label label-danger label-small">任务失败 ' + spies + '</span>');
         } else {
           $('#score').html('');
         }
@@ -310,15 +314,15 @@
         var canPropose = isLeader && teamSize > 0 && checked == teamSize && winner == null;
         $('#proposebtn').prop('disabled', !canPropose).toggle(isLeader);
         if (!isLeader) {
-          $('#teamhint').html(leader != null ? 'Waiting for ' + HtmlEscape(LabelOfPid(leader)) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
+          $('#teamhint').html(leader != null ? '等待 ' + HtmlEscape(LabelOfPid(leader)) + ' 提议任务 ' + (proposeRound + 1) + ' 的队伍（' + teamSize + ' 人）。' : '');
         } else if (proposeRound >= 0) {
-          $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' players (' + checked + '/' + teamSize + ').');
+          $('#teamhint').html('你是领袖：任务 ' + (proposeRound + 1) + '：请恰好选择 ' + teamSize + ' 名玩家（' + checked + '/' + teamSize + '）。');
         } else {
-          $('#teamhint').html('No mission to propose');
+          $('#teamhint').html('当前没有可提议的任务。');
         }
         if (started && proposeRound >= 0 && playern > 0) {
-          var info = 'Rejected proposals: ' + rejected + '/' + playern;
-          if (rejected >= playern) info += ' - the next proposal passes automatically';
+          var info = '被否决的提案：' + rejected + '/' + playern;
+          if (rejected >= playern) info += ' —— 下一个提案将自动通过';
           $('#rejectinfo').html(info);
         } else {
           $('#rejectinfo').html('');
@@ -347,7 +351,7 @@
           currentVoten = 0;
           myVoted = -1;
         }
-        $('#room').html(data.room);
+        $('#room').html(RoomLabel(data.room));
         room = data.room;
         if (data.room == 'Lobby') {
           $('#gamepad').hide();
@@ -392,7 +396,7 @@
         } catch (e) {}
       }
       function ChangeName() {
-        me = prompt("Input your name", me == null ? "" : me);
+        me = prompt("请输入你的名字", me == null ? "" : me);
         if (me == null || me == '') me = "Harry Potter";
         if (me.length > 20) me = me.slice(0, 20);
         SaveName();
@@ -412,11 +416,11 @@
         InitChat(socket);
         InitAi(socket);
         socket.on('connect', function(data) {
-          $('#WARNING').html('CONNECTED');
+          $('#WARNING').html('已连接');
           socket.emit('me', {'name': encodeURIComponent(me), 'room': room, 'pid': pid});
         });
         socket.on('disconnect', function(data) {
-          $('#WARNING').html('DISCONNECTED');
+          $('#WARNING').html('已断开');
         });
         socket.on('votes', function(data) {
           Fill(data);
@@ -442,10 +446,10 @@
               if (spy.pid == pid) continue;
               partners.push(spy.number + '. ' + RawName(spy.name));
             }
-            var msg = partners.length == 1 ? 'Your partner is ' + partners[0] + '.' : 'Your partners are ' + partners.join(', ') + '.';
-            alert(LabelOfPid(pid) + ', you are a SPY. ' + msg);
+            var msg = partners.length == 1 ? '你的搭档是 ' + partners[0] + '。' : '你的搭档是 ' + partners.join('、') + '。';
+            alert(LabelOfPid(pid) + '，你是间谍。' + msg);
           } else {
-            alert(LabelOfPid(pid) + ', you are a RESISTANCE MEMBER.');
+            alert(LabelOfPid(pid) + '，你是抵抗组织成员。');
           }
         });
       }
@@ -455,11 +459,11 @@
       });
       $(document).ready(Connect);
       function Start() {
-        if (started && winner == null && !confirm('Restart the game?')) return;
+        if (started && winner == null && !confirm('重新开始游戏？')) return;
         socket.emit('start');
       }
       function Surrender() {
-        if (!confirm('Surrender and let the other side win?')) return;
+        if (!confirm('确定投降并让对方获胜吗？')) return;
         socket.emit('surrender');
       }
       function Pass(round) {
@@ -490,7 +494,7 @@
         socket.emit('create');
       }
       function JoinRoom() {
-        var room2 = prompt("Please enter room number");
+        var room2 = prompt("请输入房间号");
         if (room2 == null) return;
         if (socket != null) {
           socket.emit('join', {'room': room2});
@@ -505,131 +509,131 @@
     <nav class="navbar navbar-default">
       <div class="container-fluid">
         <div class="navbar-header">
-          <a class="navbar-brand" href="#"><i class="fa fa-rebel"></i> Resistance</a>
+          <a class="navbar-brand" href="#"><i class="fa fa-rebel"></i> 抵抗组织</a>
         </div>
 				<p class="navbar-text">
 					<a class="navbar-link" onclick="ChangeName()">
             <span style="font-weight:bolder;" id="me"></span>
           </a>
           <span class="label label-primary"><i class="fa fa-home"></i> <span id="room"></span></span>
-          <span id="WARNING"><span class="text-success">CONNECTED</span>
+          <span id="WARNING"><span class="text-success">已连接</span>
         </p>
         <div class="navbar-collapse" id="navbar_collapse">
-          <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
-          <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
-          <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> Leave</button>
-          <button class="btn navbar-btn btn-info pull-right" data-toggle="modal" data-target="#rules-modal"><i class="fa fa-lg fa-book"></i> Rule</button>
+          <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> 创建</button>
+          <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> 加入</button>
+          <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> 离开</button>
+          <button class="btn navbar-btn btn-info pull-right" data-toggle="modal" data-target="#rules-modal"><i class="fa fa-lg fa-book"></i> 规则</button>
         </div>
       </div>
     </nav>
     <div class="container-fluid">
-      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> Start</button> <button class="btn btn-warning" id="surrenderbtn" style="display:none" onclick="Surrender();"><i class="fa fa-lg fa-flag"></i> Surrender</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span> <span id="score"></span></h2>
+      <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> 开始</button> <button class="btn btn-warning" id="surrenderbtn" style="display:none" onclick="Surrender();"><i class="fa fa-lg fa-flag"></i> 投降</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span> <span id="score"></span></h2>
       <div id="gamepad">
-        <h4 id="prestart">Waiting for the game to start...</h4>
+        <h4 id="prestart">等待游戏开始……</h4>
         <div id="winner" style="display:none"></div>
         <div class="row">
           <div class="col-lg-4 col-md-6" id="proposalbox" style="display:none">
             <div class="panel panel-primary">
               <div class="panel-heading">
-                <i class="fa fa-users"></i> Players number: <span id="playern"></span>, <i class="fa fa-user-secret"></i> Spies number: <span id="spyn"></span>
+                <i class="fa fa-users"></i> 玩家人数：<span id="playern"></span>，<i class="fa fa-user-secret"></i> 间谍人数：<span id="spyn"></span>
               </div>
               <div class="panel-body">
                 <div class="alert alert-warning" id="reconsider" style="display:none">
-                  <i class="fa fa-comments"></i> Someone spoke in chat. You may revise this proposal (select a new team and Propose) or keep it.
-                  <button class="btn btn-xs btn-default" onclick="KeepProposal()">Keep</button>
+                  <i class="fa fa-comments"></i> 有人在聊天中发言了。你可以重新修订这个提案（重选队伍并点“提议”），或保留原提案。
+                  <button class="btn btn-xs btn-default" onclick="KeepProposal()">保留</button>
                 </div>
                 <ul class="list-group" id="proposals"></ul>
                 <div class="well well-sm">
                   <p id="rejectinfo" class="text-muted"></p>
                   <div id="name_checks"></div>
                   <p id="teamhint" class="text-muted"></p>
-                  <button class="btn btn-primary" id="proposebtn" disabled onclick="Propose()"><i class="fa fa-th-list"></i> Propose</button>
+                  <button class="btn btn-primary" id="proposebtn" disabled onclick="Propose()"><i class="fa fa-th-list"></i> 提议</button>
                 </div>
                 <div class="well well-sm" id="proposal"></div>
-                <button class="btn btn-success" id="yesbtn" disabled onclick="Yes()"><i class="fa fa-thumbs-up"></i> Yes</button>
-                <button class="btn btn-danger" id="nobtn" disabled onclick="No()"><i class="fa fa-thumbs-down"></i> No</button>
+                <button class="btn btn-success" id="yesbtn" disabled onclick="Yes()"><i class="fa fa-thumbs-up"></i> 赞成</button>
+                <button class="btn btn-danger" id="nobtn" disabled onclick="No()"><i class="fa fa-thumbs-down"></i> 反对</button>
               </div>
             </div>
           </div>
           <div class="col-lg-2 col-md-3" id="missionbox0" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 1 (<span id="voten0"></span>, <span id="failneed0"></span>) <span class="label label-warning" id="nextbadge0" style="display:none">Next</span>
+                任务 1（<span id="voten0"></span>，<span id="failneed0"></span>） <span class="label label-warning" id="nextbadge0" style="display:none">当前</span>
               </div>
               <div class="panel-body">
-                <p>Votes: <span id="0"></span></p>
-                <p>Team: <span class="text-primary" id="voters0"></span></p>
+                <p>结果：<span id="0"></span></p>
+                <p>队伍：<span class="text-primary" id="voters0"></span></p>
                 <p id="votewait0" class="text-muted"></p>
-                <div><button class="btn btn-success" disabled onclick="Pass(0)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(0)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(0)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(0)"><i class="fa fa-rebel"></i> 成功</button> <button class="btn btn-danger" disabled onclick="Fail(0)"><i class="fa fa-ban"></i> 失败</button> <button class="btn btn-primary" disabled onclick="ClearVote(0)"><i class="fa fa-undo"></i> 清除</button></div>
               </div>
             </div>
           </div>
           <div class="col-lg-2 col-md-3" id="missionbox1" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 2 (<span id="voten1"></span>, <span id="failneed1"></span>) <span class="label label-warning" id="nextbadge1" style="display:none">Next</span>
+                任务 2（<span id="voten1"></span>，<span id="failneed1"></span>） <span class="label label-warning" id="nextbadge1" style="display:none">当前</span>
               </div>
               <div class="panel-body">
-                <p>Votes: <span id="1"></span></p>
-                <p>Team: <span class="text-primary" id="voters1"></span></p>
+                <p>结果：<span id="1"></span></p>
+                <p>队伍：<span class="text-primary" id="voters1"></span></p>
                 <p id="votewait1" class="text-muted"></p>
-                <div><button class="btn btn-success" disabled onclick="Pass(1)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(1)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(1)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(1)"><i class="fa fa-rebel"></i> 成功</button> <button class="btn btn-danger" disabled onclick="Fail(1)"><i class="fa fa-ban"></i> 失败</button> <button class="btn btn-primary" disabled onclick="ClearVote(1)"><i class="fa fa-undo"></i> 清除</button></div>
               </div>
             </div>
           </div>
           <div class="col-lg-2 col-md-3" id="missionbox2" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 3 (<span id="voten2"></span>, <span id="failneed2"></span>) <span class="label label-warning" id="nextbadge2" style="display:none">Next</span>
+                任务 3（<span id="voten2"></span>，<span id="failneed2"></span>） <span class="label label-warning" id="nextbadge2" style="display:none">当前</span>
               </div>
               <div class="panel-body">
-                <p>Votes: <span id="2"></span></p>
-                <p>Team: <span class="text-primary" id="voters2"></span></p>
+                <p>结果：<span id="2"></span></p>
+                <p>队伍：<span class="text-primary" id="voters2"></span></p>
                 <p id="votewait2" class="text-muted"></p>
-                <div><button class="btn btn-success" disabled onclick="Pass(2)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(2)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(2)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(2)"><i class="fa fa-rebel"></i> 成功</button> <button class="btn btn-danger" disabled onclick="Fail(2)"><i class="fa fa-ban"></i> 失败</button> <button class="btn btn-primary" disabled onclick="ClearVote(2)"><i class="fa fa-undo"></i> 清除</button></div>
               </div>
             </div>
           </div>
           <div class="col-lg-2 col-md-3" id="missionbox3" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 4 (<span id="voten3"></span>, <span id="failneed3"></span>) <span class="label label-warning" id="nextbadge3" style="display:none">Next</span>
+                任务 4（<span id="voten3"></span>，<span id="failneed3"></span>） <span class="label label-warning" id="nextbadge3" style="display:none">当前</span>
               </div>
               <div class="panel-body">
-                <p>Votes: <span id="3"></span></p>
-                <p>Team: <span class="text-primary" id="voters3"></span></p>
+                <p>结果：<span id="3"></span></p>
+                <p>队伍：<span class="text-primary" id="voters3"></span></p>
                 <p id="votewait3" class="text-muted"></p>
-                <div><button class="btn btn-success" disabled onclick="Pass(3)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(3)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(3)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(3)"><i class="fa fa-rebel"></i> 成功</button> <button class="btn btn-danger" disabled onclick="Fail(3)"><i class="fa fa-ban"></i> 失败</button> <button class="btn btn-primary" disabled onclick="ClearVote(3)"><i class="fa fa-undo"></i> 清除</button></div>
               </div>
             </div>
           </div>
           <div class="col-lg-2 col-md-3" id="missionbox4" style="display:none">
             <div class="panel panel-info">
               <div class="panel-heading">
-                Mission 5 (<span id="voten4"></span>, <span id="failneed4"></span>) <span class="label label-warning" id="nextbadge4" style="display:none">Next</span>
+                任务 5（<span id="voten4"></span>，<span id="failneed4"></span>） <span class="label label-warning" id="nextbadge4" style="display:none">当前</span>
               </div>
               <div class="panel-body">
-                <p>Votes: <span id="4"></span></p>
-                <p>Team: <span class="text-primary" id="voters4"></span></p>
+                <p>结果：<span id="4"></span></p>
+                <p>队伍：<span class="text-primary" id="voters4"></span></p>
                 <p id="votewait4" class="text-muted"></p>
-                <div><button class="btn btn-success" disabled onclick="Pass(4)"><i class="fa fa-rebel"></i> Pass</button> <button class="btn btn-danger" disabled onclick="Fail(4)"><i class="fa fa-ban"></i> Fail</button> <button class="btn btn-primary" disabled onclick="ClearVote(4)"><i class="fa fa-undo"></i> Clear</button></div>
+                <div><button class="btn btn-success" disabled onclick="Pass(4)"><i class="fa fa-rebel"></i> 成功</button> <button class="btn btn-danger" disabled onclick="Fail(4)"><i class="fa fa-ban"></i> 失败</button> <button class="btn btn-primary" disabled onclick="ClearVote(4)"><i class="fa fa-undo"></i> 清除</button></div>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="well" id="gameinstruction">
-        <h4>You are in the
-          <span class="label label-primary"><i class="fa fa-home"></i> <span>Lobby</span></span>
-          .
+        <h4>你当前位于
+          <span class="label label-primary"><i class="fa fa-home"></i> <span>大厅</span></span>
+          。
         </h4>
-        <h4>Please 
-          <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
-          or
-          <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
-          a room.
+        <h4>请
+          <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> 创建</button>
+          或
+          <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> 加入</button>
+          一个房间。
         </h4>
-        <h4>Game rules</h4>
+        <h4>游戏规则</h4>
         <div id="lobbyrules"></div>
       </div>
     </div>
@@ -637,21 +641,21 @@
       <div class="modal-dialog" role="document">
         <div class="modal-content">
           <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-            <h4 class="modal-title">Game rules</h4>
+            <button type="button" class="close" data-dismiss="modal" aria-label="关闭"><span aria-hidden="true">&times;</span></button>
+            <h4 class="modal-title">游戏规则</h4>
           </div>
           <div class="modal-body">
-            <p>5-10 players. Each player is secretly a Resistance member or a Spy; the Spies know each other.</p>
+            <p>5-10 名玩家。每人秘密地是抵抗组织成员或间谍；间谍之间互相知道身份。</p>
             <ul>
-              <li>The game lasts up to 5 missions. The first side to win 3 missions wins.</li>
-              <li>Each mission the leader proposes a team of the size shown on the mission card.</li>
-              <li>All players vote Yes or No; a strict majority approves the team.</li>
-              <li>If a proposal is rejected, leadership passes to the next player. Once every player has proposed once and all were rejected, the next proposal passes automatically.</li>
-              <li>When a team is approved, only its members vote Pass or Fail. One Fail fails the mission, except mission 4 with 7+ players, which needs 2 Fails.</li>
-              <li>The leader rotates in player order; the first leader is random.</li>
+              <li>游戏最多进行 5 个任务，先赢下 3 个任务的一方获胜。</li>
+              <li>每个任务由领袖按任务卡上标示的人数提议一支队伍。</li>
+              <li>全体玩家投票赞成或反对，严格多数即可通过该队伍。</li>
+              <li>若提案被否决，领袖权传给下一位玩家。当每位玩家都提议过一次且全部被否决后，下一个提案将自动通过。</li>
+              <li>队伍通过后，仅由队员投票成功或失败。一张失败即令任务失败；唯一的例外是 7 人及以上的 4 号任务，需要 2 张失败才失败。</li>
+              <li>领袖按玩家顺序轮转，首位领袖随机产生。</li>
             </ul>
             <table class="table table-condensed">
-              <thead><tr><th>Players</th><th>Spies</th><th>Mission teams</th></tr></thead>
+              <thead><tr><th>玩家数</th><th>间谍数</th><th>任务队伍人数</th></tr></thead>
               <tbody>
                 <tr><td>5</td><td>2</td><td>2 3 2 3 3</td></tr>
                 <tr><td>6</td><td>2</td><td>2 3 4 3 4</td></tr>
@@ -663,7 +667,7 @@
             </table>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
           </div>
         </div>
       </div>

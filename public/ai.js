@@ -24,7 +24,7 @@
   }
 
   function RawName(name) {
-    if (name == undefined) return 'SOMEONE';
+    if (name == undefined) return '某人';
     try {
       return decodeURIComponent(name);
     } catch (e) {
@@ -33,7 +33,7 @@
   }
 
   function Label(player) {
-    if (player == null) return 'SOMEONE';
+    if (player == null) return '某人';
     return (player.number != undefined ? player.number + '. ' : '') + RawName(player.name);
   }
 
@@ -50,7 +50,7 @@
     if (document.getElementById('aimodal') != null) return;
     var aiButton =
       '<button class="btn navbar-btn btn-info" id="aibtn" type="button" style="display:none">' +
-        '<i class="fa fa-microchip"></i> Add AI' +
+        '<i class="fa fa-microchip"></i> 添加 AI' +
       '</button>';
     var rulesButton = $('.navbar-collapse button[data-target="#rules-modal"]');
     if (rulesButton.length) rulesButton.before(aiButton);
@@ -60,19 +60,19 @@
         '<div class="modal-dialog" role="document">' +
           '<div class="modal-content">' +
             '<div class="modal-header">' +
-              '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
-              '<h4 class="modal-title"><i class="fa fa-microchip"></i> AI players</h4>' +
+              '<button type="button" class="close" data-dismiss="modal" aria-label="关闭"><span aria-hidden="true">&times;</span></button>' +
+              '<h4 class="modal-title"><i class="fa fa-microchip"></i> AI 玩家</h4>' +
             '</div>' +
             '<div class="modal-body">' +
               '<div class="form-inline" style="margin-bottom:10px">' +
                 '<select id="aimodel" class="form-control input-sm"></select> ' +
-                '<button type="button" class="btn btn-primary btn-sm" id="aiaddbtn"><i class="fa fa-plus"></i> Add AI</button>' +
+                '<button type="button" class="btn btn-primary btn-sm" id="aiaddbtn"><i class="fa fa-plus"></i> 添加 AI</button>' +
               '</div>' +
               '<p id="aihint" class="text-muted"></p>' +
               '<ul class="list-group" id="ailist"></ul>' +
             '</div>' +
             '<div class="modal-footer">' +
-              '<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>' +
+              '<button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -121,7 +121,7 @@
     }
     $('#aithinking')
       .attr('title', models.join(', '))
-      .html('<i class="fa fa-spinner fa-spin"></i> AI thinking: ' + EscapeHtml(names.join(', ')))
+      .html('<i class="fa fa-spinner fa-spin"></i> AI 思考中：' + EscapeHtml(names.join('、')))
       .show();
   }
 
@@ -133,7 +133,7 @@
       html += '<div class="alert alert-danger" role="alert">' +
         '<strong>' + EscapeHtml(e.name) + '</strong> 调用失败（' + kind + '）：' + EscapeHtml(e.message) +
         ' <button type="button" class="btn btn-xs btn-default airetry" data-pid="' + EscapeHtml(pid) + '">' +
-          '<i class="fa fa-refresh"></i> Retry</button>' +
+          '<i class="fa fa-refresh"></i> 重试</button>' +
         '<button type="button" class="close aierrdismiss" data-pid="' + EscapeHtml(pid) + '"><span>&times;</span></button>' +
         '</div>';
     }
@@ -155,27 +155,27 @@
     var canEdit = CanEdit();
     $('#aiaddbtn').prop('disabled', !canEdit);
     $('#aimodel').prop('disabled', !canEdit);
-    if (!InRoom()) $('#aihint').text('Join a room to add AI players.');
-    else if (!canEdit) $('#aihint').text('AI players can only be added or removed before the game starts.');
-    else $('#aihint').text('AI players take actions through the configured models.');
+    if (!InRoom()) $('#aihint').text('加入房间后才能添加 AI 玩家。');
+    else if (!canEdit) $('#aihint').text('AI 玩家只能在游戏开始前添加或移除。');
+    else $('#aihint').text('AI 玩家通过已配置的模型进行行动。');
     var html = '';
     for (var i = 0; i < aiPlayers.length; ++i) {
       var p = aiPlayers[i];
       html += '<li class="list-group-item" title="' + AttrEscape(p.model != undefined ? p.model : 'AI') + '">' +
         '<i class="fa fa-microchip text-info"></i> ' + EscapeHtml(Label(p));
       if (thinking[p.pid]) {
-        html += ' <i class="fa fa-spinner fa-spin text-muted" title="Thinking"></i>';
+        html += ' <i class="fa fa-spinner fa-spin text-muted" title="思考中"></i>';
       }
       if (errors[p.pid]) {
-        html += ' <span class="label label-danger">Error</span>';
+        html += ' <span class="label label-danger">出错</span>';
       }
       if (canEdit) {
-        html += ' <button type="button" class="btn btn-xs btn-danger pull-right airemove" data-pid="' + EscapeHtml(p.pid) + '">Remove</button>';
+        html += ' <button type="button" class="btn btn-xs btn-danger pull-right airemove" data-pid="' + EscapeHtml(p.pid) + '">移除</button>';
       }
       html += '</li>';
     }
     if (aiPlayers.length == 0) {
-      html = '<li class="list-group-item text-muted">No AI players.</li>';
+      html = '<li class="list-group-item text-muted">暂无 AI 玩家。</li>';
     }
     $('#ailist').html(html);
     RenderErrors();
