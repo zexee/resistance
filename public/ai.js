@@ -19,6 +19,10 @@
     return $('<div/>').text(s == undefined ? '' : s).html();
   }
 
+  function AttrEscape(s) {
+    return EscapeHtml(s).replace(/"/g, '&quot;');
+  }
+
   function RawName(name) {
     if (name == undefined) return 'SOMEONE';
     try {
@@ -44,11 +48,13 @@
 
   function Build() {
     if (document.getElementById('aimodal') != null) return;
-    $('.navbar-collapse').append(
+    var aiButton =
       '<button class="btn navbar-btn btn-info" id="aibtn" type="button" style="display:none">' +
-        '<i class="fa fa-microchip"></i> AI' +
-      '</button>'
-    );
+        '<i class="fa fa-microchip"></i> Add AI' +
+      '</button>';
+    var rulesButton = $('.navbar-collapse button[data-target="#rules-modal"]');
+    if (rulesButton.length) rulesButton.before(aiButton);
+    else $('.navbar-collapse').append(aiButton);
     $('body').append(
       '<div class="modal fade" id="aimodal" tabindex="-1" role="dialog">' +
         '<div class="modal-dialog" role="document">' +
@@ -94,21 +100,29 @@
     });
   }
 
-  function ThinkingLabel(pid) {
+  function ThinkingPlayer(pid) {
     for (var i = 0; i < aiPlayers.length; ++i) {
-      if (aiPlayers[i].pid == pid) return Label(aiPlayers[i]);
+      if (aiPlayers[i].pid == pid) return aiPlayers[i];
     }
-    return pid;
+    return null;
   }
 
   function RenderThinking() {
     var names = [];
-    for (var pid in thinking) names.push(ThinkingLabel(pid));
+    var models = [];
+    for (var pid in thinking) {
+      var player = ThinkingPlayer(pid);
+      names.push(player != null ? Label(player) : pid);
+      if (player != null && player.model != undefined) models.push(player.model);
+    }
     if (names.length == 0) {
       $('#aithinking').hide();
       return;
     }
-    $('#aithinking').html('<i class="fa fa-spinner fa-spin"></i> AI thinking: ' + EscapeHtml(names.join(', '))).show();
+    $('#aithinking')
+      .attr('title', models.join(', '))
+      .html('<i class="fa fa-spinner fa-spin"></i> AI thinking: ' + EscapeHtml(names.join(', ')))
+      .show();
   }
 
   function RenderErrors() {
@@ -147,7 +161,7 @@
     var html = '';
     for (var i = 0; i < aiPlayers.length; ++i) {
       var p = aiPlayers[i];
-      html += '<li class="list-group-item">' +
+      html += '<li class="list-group-item" title="' + AttrEscape(p.model != undefined ? p.model : 'AI') + '">' +
         '<i class="fa fa-microchip text-info"></i> ' + EscapeHtml(Label(p));
       if (thinking[p.pid]) {
         html += ' <i class="fa fa-spinner fa-spin text-muted" title="Thinking"></i>';

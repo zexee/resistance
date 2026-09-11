@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 
 const NAMES = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve'];
+const ZODIAC = ['子鼠', '丑牛', '寅虎', '卯兔', '辰龙', '巳蛇', '午马', '未羊', '申猴', '酉鸡', '戌狗', '亥猪'];
 const CHROME = process.env.CHROME_PATH || '/usr/bin/google-chrome';
 let failures = 0;
 let browser = null;
@@ -362,6 +363,14 @@ async function castMission(pages, round, failNames) {
   const aiServer = await startServer({ AI_CONFIG: cfgPath });
   const b = await makePage(browser, 'http://localhost:' + aiServer.port, 'AiHost');
   check(await b.$eval('#aibtn', el => el.offsetParent !== null), 'AI button visible with a config');
+  check((await text(b, '#aibtn')).includes('Add AI'), 'AI button labelled Add AI');
+  const navButtons = await b.$$eval('.navbar-collapse button', els => els.map(el => el.textContent.trim()));
+  check(navButtons[navButtons.length - 1].includes('Rule'), 'Rule button stays last in the navbar');
+  const ruleGap = await b.evaluate(() => {
+    const rule = document.querySelector('.navbar-collapse button[data-target="#rules-modal"]').getBoundingClientRect();
+    return document.querySelector('.navbar').getBoundingClientRect().right - rule.right;
+  });
+  check(ruleGap < 40, 'Rule button is at the right end of the navbar');
   await b.click('#aibtn');
   await b.waitForFunction(() => document.querySelector('#aimodal').classList.contains('in'));
   check(await b.$eval('#aimodal', el => getComputedStyle(el).display !== 'none'), 'AI modal opens');
@@ -380,9 +389,12 @@ async function castMission(pages, round, failNames) {
     await wait(150);
   }
   await b.waitForFunction(() => document.querySelector('#joined').textContent === '5');
-  const aiNames = await text(b, '#names');
-  check(aiNames.includes('Fake') && aiNames.includes('Fake-A') && aiNames.includes('Fake-B') && aiNames.includes('Fake-C'), 'AI players added with model-name suffixes');
+  const aiInfo = await b.evaluate(() => players.filter(p => p.ai).map(p => ({ name: decodeURIComponent(p.name), model: p.model })));
+  check(aiInfo.length === 4 && new Set(aiInfo.map(p => p.name)).size === 4, 'AI players added with distinct zodiac names');
+  check(aiInfo.every(p => ZODIAC.indexOf(p.name) >= 0), 'AI names come from the zodiac');
+  check(aiInfo.every(p => p.model === 'Fake'), 'AI model exposed for hover');
   check((await b.$eval('#names', el => el.innerHTML)).includes('fa-microchip'), 'AI players show a microchip icon');
+  check((await b.$eval('#names', el => el.innerHTML)).includes('title="Fake"'), 'hover title shows the model');
   check((await b.$eval('#names', el => el.textContent)).includes('5. '), 'AI players get roster numbers');
 
   await b.click('.airemove');
@@ -402,6 +414,21 @@ async function castMission(pages, round, failNames) {
   await b.click('#startbtn');
   await b.waitForFunction(() => document.querySelector('#proposalbox').offsetParent !== null);
 
+  // force the human to be the leader so the reconsider prompt can be tested
+  for (let i = 0; i < 20 && !(await visible(b, '#proposebtn')); i++) {
+    await b.click('#startbtn');
+    await b.waitForFunction(() => document.querySelector('#proposalbox').offsetParent !== null);
+    await wait(300);
+  }
+  check(await visible(b, '#proposebtn'), 'human is the leader for the reconsider test');
+  await b.evaluate(() => {
+    const boxes = document.querySelectorAll('#name_checks input[type=checkbox]');
+    boxes[0].click();
+    boxes[1].click();
+    document.querySelector('#proposebtn').click();
+  });
+  await b.waitForFunction(() => document.querySelector('#proposal').textContent.includes('Waiting for: 1. AiHost'), {timeout: 20000});
+
   fake.state.delay = 1500;
   await b.type('#chatinput', '你们好');
   await b.click('#chatsend');
@@ -418,6 +445,12 @@ async function castMission(pages, round, failNames) {
     return el != null && el.offsetWidth === 0;
   }, {timeout: 60000});
   check(await b.$eval('#aithinking', el => el.offsetWidth === 0), 'AI thinking indicator hidden when idle');
+
+  await b.waitForFunction(() => document.querySelector('#reconsider').offsetParent !== null, {timeout: 30000});
+  check(await b.$eval('#reconsider', el => el.offsetParent !== null), 'leader sees the reconsider prompt after chat');
+  await b.click('#reconsider button');
+  await b.waitForFunction(() => document.querySelector('#reconsider').offsetParent === null);
+  check(await b.$eval('#reconsider', el => el.offsetParent === null), 'reconsider prompt dismissed by Keep');
 
   fake.state.mode = 'garbage';
   const before = await countText(b, 'AI在这里');

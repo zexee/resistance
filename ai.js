@@ -9,6 +9,8 @@ var chat = require('./chat');
 
 var NAME_MAX = 20;
 var MAX_PLAYERS = 10;
+// One name per room, never reused while the AI stays; 12 covers the 10-player cap.
+var ZODIAC = ['子鼠', '丑牛', '寅虎', '卯兔', '辰龙', '巳蛇', '午马', '未羊', '申猴', '酉鸡', '戌狗', '亥猪'];
 var CHAT_DEBOUNCE_MS = 2000;
 var TURN_GAP_MS = 250;
 var DEFAULT_TIMEOUT_MS = 30000;
@@ -122,30 +124,29 @@ function NewPid(room) {
   return pid;
 }
 
-function NextName(room, model) {
-  var base = String(model.label != undefined ? model.label : model.model).slice(0, NAME_MAX);
+function NextName(room) {
   var used = {};
   for (var pid in room.ai.byPid) {
     used[RawName(room.ai.byPid[pid].name)] = 1;
   }
-  if (used[base] == undefined) return base;
-  for (var i = 0; i < 26; ++i) {
-    var suffix = '-' + String.fromCharCode(65 + i);
-    var candidate = base.slice(0, NAME_MAX - suffix.length) + suffix;
-    if (used[candidate] == undefined) return candidate;
+  var free = [];
+  for (var i = 0; i < ZODIAC.length; ++i) {
+    if (used[ZODIAC[i]] == undefined) free.push(ZODIAC[i]);
   }
-  var n = 2;
-  while (true) {
-    var suffix = '-' + n;
-    var candidate = base.slice(0, NAME_MAX - suffix.length) + suffix;
-    if (used[candidate] == undefined) return candidate;
-    ++n;
-  }
+  if (free.length == 0) return 'AI';
+  return free[Math.floor(Math.random() * free.length)];
+}
+
+function ModelOf(room, pid) {
+  var a = room.ai != null ? room.ai.byPid[pid] : undefined;
+  if (a == undefined) return null;
+  var model = FindModel(a.model);
+  return model != null ? (model.label != undefined ? model.label : model.model) : a.model;
 }
 
 function AiState(room) {
   if (room.ai == null) {
-    room.ai = {order: [], byPid: {}, queue: [], queued: {}, running: false, chatTimer: null};
+    room.ai = {order: [], byPid: {}, queue: [], queued: {}, running: false, chatTimer: null, reconsiderPending: null};
   }
   return room.ai;
 }
@@ -165,7 +166,7 @@ function Add(room, modelId) {
   if (model == null) return null;
   var state = AiState(room);
   var pid = NewPid(room);
-  var name = NextName(room, model);
+  var name = NextName(room);
   state.order.push(pid);
   state.byPid[pid] = {
     pid: pid,
@@ -208,6 +209,7 @@ function Reset(room) {
   state.queue = [];
   state.queued = {};
   state.running = false;
+  state.reconsiderPending = null;
   if (state.chatTimer != null) {
     clearTimeout(state.chatTimer);
     state.chatTimer = null;
@@ -297,6 +299,8 @@ function OnStart(room) {
 }
 
 function OnProposal(room, pid, team, round, auto) {
+  // A new proposal replaces any pending revision request.
+  if (room.ai != null) room.ai.reconsiderPending = null;
   LogEvent(room, {event: 'proposal', actor: NumOf(room, pid), mission: round + 1, result: TeamNums(room, team)});
   if (auto) {
     LogEvent(room, {event: 'proposal_result', mission: round + 1, approved: true, auto: true, votes: []});
@@ -306,6 +310,7 @@ function OnProposal(room, pid, team, round, auto) {
 }
 
 function OnProposalVote(room, pid, round, finished, approved) {
+  if (finished && room.ai != null) room.ai.reconsiderPending = null;
   LogEvent(room, {event: 'proposal_vote', actor: NumOf(room, pid), mission: round + 1});
   if (finished) {
     var p = room.proposals[room.proposals.length - 1];
@@ -349,6 +354,8 @@ function OnChat(room, msg) {
     for (var i = 0; i < room.ai.order.length; ++i) {
       Enqueue(room, room.ai.order[i], 'chat');
     }
+    // Once the replies are done, reconsider the open proposal.
+    EnqueueRoom(room, 'reconsider');
   }, CHAT_DEBOUNCE_MS);
 }
 
@@ -393,12 +400,25 @@ function MaybeTrigger(room) {
   }
 }
 
+function QueueKey(pid, type) {
+  return (pid == null ? '' : pid) + ':' + type;
+}
+
 function Enqueue(room, pid, type) {
   if (room.ai == null || room.ai.byPid[pid] == undefined) return;
-  var key = pid + ':' + type;
+  var key = QueueKey(pid, type);
   if (room.ai.queued[key]) return;
   room.ai.queued[key] = 1;
   room.ai.queue.push({pid: pid, type: type});
+  Pump(room);
+}
+
+function EnqueueRoom(room, type) {
+  if (room.ai == null) return;
+  var key = QueueKey(null, type);
+  if (room.ai.queued[key]) return;
+  room.ai.queued[key] = 1;
+  room.ai.queue.push({pid: null, type: type});
   Pump(room);
 }
 
@@ -407,14 +427,59 @@ function Pump(room) {
   var item = room.ai.queue.shift();
   if (item == undefined) return;
   room.ai.running = true;
-  RunTask(room, item.pid, item.type, function() {
-    delete room.ai.queued[item.pid + ':' + item.type];
+  var finish = function() {
+    delete room.ai.queued[QueueKey(item.pid, item.type)];
     room.ai.running = false;
     MaybeTrigger(room);
     if (room.ai.queue.length > 0) {
       setTimeout(function() { Pump(room); }, TURN_GAP_MS);
     }
-  });
+  };
+  if (item.type == 'reconsider') {
+    RunReconsider(room, finish);
+  } else {
+    RunTask(room, item.pid, item.type, finish);
+  }
+}
+
+// After a chat round, let the leader revise the proposal; if the leader keeps
+// it, let the other AI voters reconsider their vote.
+function RunReconsider(room, done) {
+  if (!Enabled() || room.ai == null) return done();
+  if (room.winner != null || room.n < 5 || room.n > 10) return done();
+  if (room.phase != 'proposal' || room.current_proposal['text'] == undefined) return done();
+  if (room.ai.reconsiderPending != null) return done();
+  var leader = room.players[room.leader];
+  if (IsAi(room, leader)) {
+    if (HasError(room, leader)) return done();
+    var before = JSON.stringify(room.current_proposal.team);
+    RunTask(room, leader, 'repropose', function(ok) {
+      if (!ok) return done();
+      if (room.current_proposal['text'] == undefined) return done();
+      if (JSON.stringify(room.current_proposal.team) != before) return done();
+      EnqueueVoteReconsider(room, leader);
+      done();
+    });
+  } else {
+    room.ai.reconsiderPending = leader;
+    Emit(room, 'proposal_reconsider', {
+      pid: leader,
+      mission: room.current_proposal.round + 1,
+      text: room.current_proposal.text
+    });
+    done();
+  }
+}
+
+function EnqueueVoteReconsider(room, leader) {
+  if (room.current_proposal['text'] == undefined) return;
+  for (var i = 0; i < room.ai.order.length; ++i) {
+    var pid = room.ai.order[i];
+    if (pid == leader) continue;
+    if (room.players.indexOf(pid) < 0 || HasError(room, pid)) continue;
+    if (room.current_proposal[pid] == undefined) continue;
+    Enqueue(room, pid, 'reconsider_vote');
+  }
 }
 
 function ValidateNeed(room, pid, type) {
@@ -430,6 +495,15 @@ function ValidateNeed(room, pid, type) {
       return room.current_proposal['text'] != undefined &&
         room.current_proposal[pid] == undefined &&
         room.players.indexOf(pid) >= 0;
+    }
+    if (type == 'repropose') {
+      return room.current_proposal['text'] != undefined && room.players[room.leader] == pid;
+    }
+    if (type == 'reconsider_vote') {
+      return room.current_proposal['text'] != undefined &&
+        room.players.indexOf(pid) >= 0 &&
+        room.players[room.leader] != pid &&
+        room.current_proposal[pid] != undefined;
     }
   }
   if (room.phase == 'mission' && type == 'vote_mission') {
@@ -464,6 +538,20 @@ function BuildInstruction(room, pid, type) {
   if (type == 'chat') {
     return '聊天记录已更新。你可以用中文发言一次（简短、符合你的身份和策略），也可以保持沉默。不要暴露只有自己知道的信息。\n' +
       '只输出 JSON：{"action":"chat","text":"..."} 或 {"action":"silent"}';
+  }
+  if (type == 'repropose') {
+    var p = room.current_proposal;
+    return '有人在聊天中发言了。你可以修改当前提案，也可以保持不变。\n' +
+      '当前是第 ' + (p.round + 1) + ' 个任务，你（' + num + '号）是领袖，提案队伍：[' + TeamNums(room, p.team).join(',') + ']，' +
+      '需要 ' + deps.Param[room.n][p.round] + ' 名不同玩家。\n' +
+      '只输出 JSON：{"action":"repropose","team":[编号,...]} 或 {"action":"keep"}';
+  }
+  if (type == 'reconsider_vote') {
+    var p = room.current_proposal;
+    var cur = p[pid] == 1 ? 'yes' : 'no';
+    return '有人在聊天中发言了。你可以维持或改变你对当前提案的投票。\n' +
+      '提案人：' + NumOf(room, p.by) + '号；队伍：[' + TeamNums(room, p.team).join(',') + ']；你当前投的是 ' + cur + '。\n' +
+      '只输出 JSON：{"action":"reconsider","vote":"yes"}、{"action":"reconsider","vote":"no"} 或 {"action":"keep"}';
   }
   return null;
 }
@@ -501,7 +589,11 @@ function ExtractJson(text) {
 
 function ApplyAction(room, pid, type, content) {
   var obj = ExtractJson(content);
-  if (obj == null) return {kind: 'parse', message: '无法从模型输出中解析 JSON'};
+  if (obj == null) {
+    // Optional reconsiderations just keep the current state.
+    if (type == 'repropose' || type == 'reconsider_vote') return null;
+    return {kind: 'parse', message: '无法从模型输出中解析 JSON'};
+  }
   if (type == 'propose') {
     if (obj.action != 'propose' || !Array.isArray(obj.team)) {
       return {kind: 'invalid', message: '模型没有给出合法的提案 JSON'};
@@ -541,6 +633,37 @@ function ApplyAction(room, pid, type, content) {
     var round = deps.CurrentRound(room);
     if (!deps.MissionVoteAction(room, pid, round, missionVote)) {
       return {kind: 'invalid', message: '任务投票被拒绝'};
+    }
+    return null;
+  }
+  if (type == 'repropose') {
+    // Optional revision: anything that is not a valid change means keep.
+    if (obj.action != 'repropose' || !Array.isArray(obj.team)) return null;
+    var newTeam = [];
+    for (var i = 0; i < obj.team.length; ++i) {
+      var idx = Number(obj.team[i]);
+      if (!isFinite(idx) || Math.floor(idx) != idx || idx < 1 || idx > room.players.length) return null;
+      var member = room.players[idx - 1];
+      if (newTeam.indexOf(member) >= 0) return null;
+      newTeam.push(member);
+    }
+    var curTeam = room.current_proposal.team;
+    if (newTeam.length == curTeam.length) {
+      var same = true;
+      for (var i = 0; i < newTeam.length; ++i) {
+        if (newTeam[i] != curTeam[i]) { same = false; break; }
+      }
+      if (same) return null;
+    }
+    if (!deps.ProposeAction(room, pid, newTeam)) return null;
+    return null;
+  }
+  if (type == 'reconsider_vote') {
+    if (obj.action == 'reconsider' && (obj.vote == 'yes' || obj.vote == 'no')) {
+      var change = obj.vote == 'yes' ? 1 : -1;
+      if (room.current_proposal['text'] != undefined && room.current_proposal[pid] != change) {
+        deps.ProposalVoteAction(room, pid, change);
+      }
     }
     return null;
   }
@@ -634,10 +757,10 @@ function CallModel(room, pid, instruction, cb) {
 
 function RunTask(room, pid, type, done) {
   var a = room.ai != null ? room.ai.byPid[pid] : undefined;
-  if (a == undefined) return done();
-  if (!ValidateNeed(room, pid, type)) return done();
+  if (a == undefined) return done(false);
+  if (!ValidateNeed(room, pid, type)) return done(false);
   var instruction = BuildInstruction(room, pid, type);
-  if (instruction == null) return done();
+  if (instruction == null) return done(false);
   a.thinking = true;
   Emit(room, 'ai_thinking', {pid: pid, on: true});
   CallModel(room, pid, instruction, function(err, content) {
@@ -645,21 +768,21 @@ function RunTask(room, pid, type, done) {
     Emit(room, 'ai_thinking', {pid: pid, on: false});
     if (err != null) {
       SetError(room, pid, type, err);
-      return done();
+      return done(false);
     }
     // The board may have changed while the model was thinking.
-    if (!ValidateNeed(room, pid, type)) return done();
+    if (!ValidateNeed(room, pid, type)) return done(false);
     var result = ApplyAction(room, pid, type, content);
     if (result != null) {
       console.log('AIFAIL ' + room.id + ' ' + a.name + ' ' + type + ' ' + result.kind + ': ' + result.message + ' raw=' + Truncate(content, 500));
       SetError(room, pid, type, result);
-      return done();
+      return done(false);
     }
     a.messages.push({role: 'user', content: instruction});
     a.messages.push({role: 'assistant', content: content});
     ClearError(room, pid);
     if (type != 'chat') deps.SendVotes(room);
-    done();
+    done(true);
   });
 }
 
@@ -702,11 +825,26 @@ function Setup(socket, io, dependencies) {
     Emit(room, 'ai_error', {pid: pid, name: a.name, error: null});
     Enqueue(room, pid, type);
   });
+  socket.on('keep_proposal', function() {
+    if (!Enabled()) return;
+    var room = deps.GetRoom(socket);
+    if (room.ai == null || room.ai.reconsiderPending == null) return;
+    var pid = deps.PlayerId(socket);
+    if (room.ai.reconsiderPending != pid) return;
+    if (room.phase != 'proposal' || room.current_proposal['text'] == undefined) {
+      room.ai.reconsiderPending = null;
+      return;
+    }
+    room.ai.reconsiderPending = null;
+    console.log('AIKEEP', pid, room.id);
+    EnqueueVoteReconsider(room, pid);
+  });
 }
 
 module.exports = {
   Setup: Setup,
   IsAi: IsAi,
+  ModelOf: ModelOf,
   Add: Add,
   Remove: Remove,
   Reset: Reset,

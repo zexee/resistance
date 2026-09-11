@@ -154,7 +154,8 @@ function PlayerList(room) {
   if (room.players != undefined && room.n > 0 && room.winner == null) {
     for (var i = 0; i < room.players.length; ++i) {
       var pid = room.players[i];
-      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1, ai: ai.IsAi(room, pid) ? 1 : undefined});
+      var isAi = ai.IsAi(room, pid);
+      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1, ai: isAi ? 1 : undefined, model: isAi ? ai.ModelOf(room, pid) : undefined});
     }
     return list;
   }
@@ -164,7 +165,8 @@ function PlayerList(room) {
     var pid = order[i];
     if (seen[pid] || !IsOnline(room, pid)) continue;
     seen[pid] = 1;
-    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1, ai: ai.IsAi(room, pid) ? 1 : undefined});
+    var isAi = ai.IsAi(room, pid);
+    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1, ai: isAi ? 1 : undefined, model: isAi ? ai.ModelOf(room, pid) : undefined});
   }
   for (var s in room.sockets) {
     var pid = PlayerId(room.sockets[s]);

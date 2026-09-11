@@ -11,12 +11,13 @@ function check(cond, msg) {
   else { failures++; console.log('FAIL', msg); }
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
+const ZODIAC = ['子鼠', '丑牛', '寅虎', '卯兔', '辰龙', '巳蛇', '午马', '未羊', '申猴', '酉鸡', '戌狗', '亥猪'];
 
 // Minimal OpenAI-compatible endpoint. In auto mode it answers every AI action
 // with a legal move derived from the last instruction, so the game can be
 // played without a real model.
 function startFakeLlm() {
-  const state = { mode: 'auto', requests: [] };
+  const state = { mode: 'auto', requests: [], flipVotes: false, reproposeTeam: null, reconsiderCalls: 0 };
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', c => { body += c; });
@@ -33,7 +34,14 @@ function startFakeLlm() {
       const messages = parsed.messages || [];
       const last = messages.length ? String(messages[messages.length - 1].content) : '';
       let content = '{"action":"silent"}';
-      if (last.indexOf('作为领袖提议') >= 0) {
+      if (last.indexOf('修改当前提案') >= 0) {
+        content = state.reproposeTeam
+          ? JSON.stringify({ action: 'repropose', team: state.reproposeTeam })
+          : JSON.stringify({ action: 'keep' });
+      } else if (last.indexOf('维持或改变你对当前提案的投票') >= 0) {
+        state.reconsiderCalls++;
+        content = JSON.stringify({ action: 'reconsider', vote: state.flipVotes ? 'no' : 'keep' });
+      } else if (last.indexOf('作为领袖提议') >= 0) {
         const m = last.match(/需要恰好 (\d+)/);
         const size = m ? Number(m[1]) : 2;
         const team = [];
@@ -58,7 +66,7 @@ function connect(port, name, pid) {
     const s = io('http://localhost:' + port, { forceNew: true });
     const state = {
       s, name, pid, room: null, lastVotes: null, lastPlayers: null,
-      chats: [], aiErrors: [], aiThinking: [], aiModels: null
+      chats: [], aiErrors: [], aiThinking: [], aiModels: null, reconsiderEvents: []
     };
     s.on('connect', () => resolve(state));
     s.on('connect_error', reject);
@@ -66,11 +74,12 @@ function connect(port, name, pid) {
       if (d.room !== 'Lobby') state.room = d.room;
       state.lastPlayers = d.players;
     });
-    s.on('votes', d => { state.lastVotes = d; state.lastPlayers = d.players; });
+    s.on('votes', d => { state.lastVotes = d; state.lastPlayers = d.players; state.votesCount = (state.votesCount || 0) + 1; });
     s.on('chat', d => state.chats.push(d.message));
     s.on('ai_models', d => { state.aiModels = d; });
     s.on('ai_error', d => state.aiErrors.push(d));
     s.on('ai_thinking', d => state.aiThinking.push(d));
+    s.on('proposal_reconsider', d => state.reconsiderEvents.push(d));
   });
 }
 
@@ -138,14 +147,18 @@ async function drive(human, maxMs) {
   await wait(200);
   check(human.lastPlayers.length === 5, 'four AI players added to the room');
   const aiNames = human.lastPlayers.filter(p => p.ai).map(p => decodeURIComponent(p.name));
-  check(JSON.stringify(aiNames) === JSON.stringify(['Fake', 'Fake-A', 'Fake-B', 'Fake-C']), 'AI names follow the model name with suffixes');
+  check(aiNames.length === 4 && new Set(aiNames).size === 4, 'AI names are distinct');
+  check(aiNames.every(n => ZODIAC.indexOf(n) >= 0), 'AI names come from the zodiac');
+  check(human.lastPlayers.filter(p => p.ai).every(p => p.model === 'Fake'), 'AI players expose their model for hover');
   check(human.lastPlayers.filter(p => p.ai).every(p => p.online === true), 'AI players are always online');
 
+  const aiPidsBefore = human.lastPlayers.filter(p => p.ai).map(p => p.pid);
   human.s.emit('ai_add', { model: 'fake' });
   await wait(200);
   check(human.lastPlayers.length === 6, 'fifth AI added');
-  const extra = human.lastPlayers.filter(p => p.ai && decodeURIComponent(p.name) === 'Fake-D')[0];
-  check(extra != null, 'fifth AI named Fake-D');
+  const extra = human.lastPlayers.filter(p => p.ai && aiPidsBefore.indexOf(p.pid) < 0)[0];
+  check(extra != null && ZODIAC.indexOf(decodeURIComponent(extra.name)) >= 0, 'fifth AI gets a free zodiac name');
+  check(aiNames.indexOf(decodeURIComponent(extra.name)) < 0, 'fifth AI does not reuse a name');
   human.s.emit('ai_remove', { pid: extra.pid });
   await wait(200);
   check(human.lastPlayers.length === 5 && !human.lastPlayers.some(p => p.pid === extra.pid), 'AI removed before the game');
@@ -209,6 +222,91 @@ async function drive(human, maxMs) {
     await wait(100);
   }
   check(replied, 'retry after a timeout works');
+
+  // chat during proposal voting: leader may revise, then AI voters reconsider
+  async function restartUntilLeader(wantHuman, tries) {
+    for (let t = 0; t < tries; t++) {
+      const before = human.votesCount || 0;
+      human.s.emit('start');
+      for (let i = 0; i < 60; i++) {
+        const v = human.lastVotes;
+        if ((human.votesCount || 0) > before && v.winner == null && v.players.length === 5) {
+          if ((v.leader === human.pid) === wantHuman) return v;
+          break;
+        }
+        await wait(100);
+      }
+      await wait(200);
+    }
+    return null;
+  }
+
+  function ProposalVoters(v) {
+    const meta = { text: 1, who: 1, by: 1, round: 1, team: 1, auto: 1 };
+    return Object.keys(v.proposal || {}).filter(k => !meta[k]);
+  }
+
+  async function waitAllAiVotes() {
+    for (let i = 0; i < 300; i++) {
+      const v = human.lastVotes;
+      if (v && v.phase === 'proposal' && v.proposal.text != undefined) {
+        const voters = ProposalVoters(v);
+        if (voters.length >= 4 && voters.indexOf(human.pid) < 0) return v.current_round;
+      } else if (v && v.leader === human.pid && v.phase === 'proposal') {
+        human.s.emit('propose', { team: v.players.slice(0, v.param[v.current_round]).map(p => p.pid) });
+      }
+      await wait(100);
+    }
+    return -1;
+  }
+
+  async function waitArchived(round) {
+    for (let i = 0; i < 100; i++) {
+      const v = human.lastVotes;
+      const last = v && v.proposals.length ? v.proposals[v.proposals.length - 1] : null;
+      if (last && last.round === round) return last;
+      await wait(100);
+    }
+    return null;
+  }
+
+  // scenario 1: human leader gets the prompt and keeps the proposal
+  let v = await restartUntilLeader(true, 30);
+  check(v != null, 'started a game with the human as leader');
+  let reconRound = await waitAllAiVotes();
+  check(reconRound >= 0, 'proposal stays open with all AI votes cast');
+  fake.state.flipVotes = true;
+  human.s.emit('chat', { text: '大家再想想' });
+  for (let i = 0; i < 100 && !human.reconsiderEvents.some(e => e.pid === human.pid); i++) await wait(100);
+  check(human.reconsiderEvents.some(e => e.pid === human.pid), 'human leader is asked to reconsider');
+  human.s.emit('keep_proposal');
+  for (let i = 0; i < 200 && fake.state.reconsiderCalls < 4; i++) await wait(100);
+  check(fake.state.reconsiderCalls >= 4, 'AI voters reconsider after the chat round');
+  await wait(1000);
+  human.s.emit('yes');
+  let archived = await waitArchived(reconRound);
+  let flipped = 0;
+  for (const p of human.lastVotes.players) if (p.ai && archived != null && archived[p.pid] === -1) flipped++;
+  check(flipped === 4, 'all AI voters flipped their proposal votes after the chat');
+
+  // scenario 2: AI leader keeps the proposal, then the other AIs reconsider
+  fake.state.flipVotes = false;
+  const callsBefore = fake.state.reconsiderCalls;
+  v = await restartUntilLeader(false, 30);
+  check(v != null, 'started a game with an AI as leader');
+  reconRound = await waitAllAiVotes();
+  check(reconRound >= 0, 'AI leader proposal stays open with all AI votes cast');
+  fake.state.flipVotes = true;
+  human.s.emit('chat', { text: '再讨论一下' });
+  for (let i = 0; i < 200 && fake.state.reconsiderCalls < callsBefore + 3; i++) await wait(100);
+  check(fake.state.reconsiderCalls >= callsBefore + 3, 'other AI voters reconsider after the AI leader keeps');
+  await wait(1000);
+  human.s.emit('yes');
+  archived = await waitArchived(reconRound);
+  flipped = 0;
+  for (const p of human.lastVotes.players) if (p.ai && archived != null && archived[p.pid] === -1) flipped++;
+  check(flipped === 3, 'non-leader AI voters flipped their votes');
+  fake.state.flipVotes = false;
 
   human.s.close();
   await wait(200);

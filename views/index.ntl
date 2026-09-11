@@ -42,6 +42,7 @@
       var proposalOpen = false;
       var currentVoten = 0;
       var myVoted = -1;
+      var reconsiderText = null;
       var forcedPid = false;
       var forcedName = false;
       var pid = #pid#;
@@ -62,6 +63,9 @@
       EnsurePid();
       function HtmlEscape(s) {
         return $('<div/>').text(s == undefined ? '' : s).html();
+      }
+      function AttrEscape(s) {
+        return HtmlEscape(s).replace(/"/g, '&quot;');
       }
       function PlayerById(p) {
         for (var i in players) {
@@ -124,6 +128,10 @@
         if (proposeRound < 0 || data[proposeRound].voten == 0) myVoted = -1;
         proposalOpen = data.proposal['text'] != undefined;
         currentVoten = proposeRound >= 0 ? data[proposeRound].voten : 0;
+        if (reconsiderText != null && (!proposalOpen || data.proposal['text'] != reconsiderText)) {
+          reconsiderText = null;
+          $('#reconsider').hide();
+        }
         $('#playern').html(data.n);
         $('#room').html(data.room);
         if (data.room == 'Lobby') {
@@ -240,9 +248,10 @@
         var html = [];
         for (var i in players) {
           var player = players[i];
-          var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '">' + HtmlEscape(PlayerLabel(player)) + '</strong>';
+          var title = player.ai ? ' title="' + AttrEscape(player.model != undefined ? player.model : 'AI') + '"' : '';
+          var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '"' + title + '>' + HtmlEscape(PlayerLabel(player)) + '</strong>';
           if (player.ai) {
-            item += ' <i class="fa fa-microchip text-info" title="AI"></i>';
+            item += ' <i class="fa fa-microchip text-info"' + title + '></i>';
           }
           if (started && leader != null && player.pid == leader) {
             item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
@@ -412,6 +421,11 @@
           Join(data);
           SaveName();
         });
+        socket.on('proposal_reconsider', function(data) {
+          if (data == undefined || data.pid != pid) return;
+          reconsiderText = data.text != undefined ? data.text : '';
+          $('#reconsider').show();
+        });
         socket.on('role', function(data) {
           started = true;
           phase = 'proposal';
@@ -456,6 +470,11 @@
       function No() {
         socket.emit('no');
       }
+      function KeepProposal() {
+        reconsiderText = null;
+        $('#reconsider').hide();
+        socket.emit('keep_proposal');
+      }
       function CreateRoom() {
         socket.emit('create');
       }
@@ -488,7 +507,7 @@
           <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> Create</button>
           <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> Join</button>
           <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> Leave</button>
-          <button class="btn navbar-btn btn-info" data-toggle="modal" data-target="#rules-modal"><i class="fa fa-lg fa-book"></i> Rules</button>
+          <button class="btn navbar-btn btn-info pull-right" data-toggle="modal" data-target="#rules-modal"><i class="fa fa-lg fa-book"></i> Rule</button>
         </div>
       </div>
     </nav>
@@ -504,6 +523,10 @@
                 <i class="fa fa-users"></i> Players number: <span id="playern"></span>, <i class="fa fa-user-secret"></i> Spies number: <span id="spyn"></span>
               </div>
               <div class="panel-body">
+                <div class="alert alert-warning" id="reconsider" style="display:none">
+                  <i class="fa fa-comments"></i> Someone spoke in chat. You may revise this proposal (select a new team and Propose) or keep it.
+                  <button class="btn btn-xs btn-default" onclick="KeepProposal()">Keep</button>
+                </div>
                 <ul class="list-group" id="proposals"></ul>
                 <div class="well well-sm">
                   <p id="rejectinfo" class="text-muted"></p>
