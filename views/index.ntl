@@ -277,8 +277,15 @@
         $('#names').html(html.join(' | '));
       }
       function UpdateVisibility() {
-        var showProposal = started && phase == 'proposal' && proposeRound >= 0 && winner == null;
+        var showProposal = started && (phase == 'proposal' || phase == 'mission') && proposeRound >= 0 && winner == null;
         $('#proposalbox').toggle(showProposal);
+        // Keep the proposal history visible during the mission vote but hide the
+        // interactive proposal controls.
+        var inProposal = started && phase == 'proposal' && winner == null;
+        $('#proposalcontrols').toggle(inProposal);
+        $('#yesbtn').toggle(inProposal);
+        $('#nobtn').toggle(inProposal);
+        if (!inProposal) $('#reconsider').hide();
         $('#prestart').toggle(!started);
         $('#surrenderbtn').toggle(started && winner == null);
         $('#winner').toggle(winner != null);
@@ -550,7 +557,7 @@
                   <button class="btn btn-xs btn-default" onclick="KeepProposal()">保留</button>
                 </div>
                 <ul class="list-group" id="proposals"></ul>
-                <div class="well well-sm">
+                <div class="well well-sm" id="proposalcontrols">
                   <p id="rejectinfo" class="text-muted"></p>
                   <div id="name_checks"></div>
                   <p id="teamhint" class="text-muted"></p>
@@ -656,9 +663,9 @@
             <ul>
               <li>游戏最多进行 5 个任务，先赢下 3 个任务的一方获胜。</li>
               <li>每个任务由领袖按任务卡上标示的人数提议一支队伍。</li>
-              <li>全体玩家投票赞成或反对，严格多数即可通过该队伍。</li>
+              <li>全体玩家投票赞成或反对，严格多数即可通过该队伍。提案投票是公开的，但只有在全体玩家都投完票后，才会公开每个人投的是赞成还是反对。</li>
               <li>若提案被否决，领袖权传给下一位玩家。当每位玩家都提议过一次且全部被否决后，下一个提案将自动通过。</li>
-              <li>队伍通过后，仅由队员投票成功或失败。一张失败即令任务失败；唯一的例外是 7 人及以上的 4 号任务，需要 2 张失败才失败。</li>
+              <li>队伍通过后，仅由队员投票成功或失败。一张失败即令任务失败；唯一的例外是 7 人及以上的 4 号任务，需要 2 张失败才失败。任务投票是匿名的，不公开谁投了什么，但会公开成功票和失败票各有多少张。</li>
               <li>领袖按玩家顺序轮转，首位领袖随机产生。</li>
             </ul>
             <table class="table table-condensed">

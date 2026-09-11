@@ -300,8 +300,10 @@ async function castMission(pages, round, failNames) {
   check((await text(a, '#proposal')).includes('1. Alice') && (await text(a, '#proposal')).includes('2. Bob'), 'proposal shows player numbers');
 
   await voteProposal(pages, true);
-  await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
-  check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden in mission phase');
+  await a.waitForFunction(() => document.querySelector('#proposalcontrols').offsetParent === null);
+  check(await a.$eval('#proposalbox', el => el.offsetParent !== null), 'proposal history stays visible in mission phase');
+  check(await a.$eval('#proposalcontrols', el => el.offsetParent === null), 'proposal controls hidden in mission phase');
+  check(await a.$eval('#proposals', el => el.offsetParent !== null), 'proposal history list visible during mission');
   check((await text(a, '#voters0')).includes('Alice') && (await text(a, '#voters0')).includes('Bob'), 'mission team displayed');
   check((await text(a, '#voters0')).includes('1. '), 'mission team shows player numbers');
 
@@ -338,7 +340,7 @@ async function castMission(pages, round, failNames) {
   await selectAndPropose(leader2, [NAMES[0], NAMES[1], NAMES[2]]);
   await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('任务 2'));
   await voteProposal(pages, true);
-  await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
+  await a.waitForFunction(() => document.querySelector('#proposalcontrols').offsetParent === null);
   await castMission(pages, 1, []);
   await a.waitForFunction(() => document.querySelector('#teamhint').textContent.includes('任务 3'));
 
@@ -347,7 +349,7 @@ async function castMission(pages, round, failNames) {
   await selectAndPropose(leader3, [NAMES[0], NAMES[1]]);
   await a.waitForFunction(() => document.querySelector('#proposal').textContent.includes('任务 3'));
   await voteProposal(pages, true);
-  await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
+  await a.waitForFunction(() => document.querySelector('#proposalcontrols').offsetParent === null);
   await castMission(pages, 2, []);
 
   await a.waitForFunction(() => document.querySelector('#winner').offsetParent !== null);
