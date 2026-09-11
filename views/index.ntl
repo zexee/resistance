@@ -77,11 +77,17 @@
           return name;
         }
       }
+      function PlayerLabel(player) {
+        if (player == null) return 'SOMEONE';
+        return (player.number != undefined ? player.number + '. ' : '') + RawName(player.name);
+      }
+      function LabelOfPid(p) {
+        return PlayerLabel(PlayerById(p));
+      }
       function NamesOfPids(pids) {
         var names = [];
         for (var i in pids) {
-          var name = NameOfPid(pids[i]);
-          names.push(RawName(name));
+          names.push(LabelOfPid(pids[i]));
         }
         return names.join(', ');
       }
@@ -159,7 +165,7 @@
             for (var j in data[i].voted) votedPids[data[i].voted[j]] = 1;
             for (var j in missionTeams[i]) {
               if (votedPids[missionTeams[i][j]] == undefined) {
-                waiting.push(DisplayName(NameOfPid(missionTeams[i][j])));
+                waiting.push(HtmlEscape(LabelOfPid(missionTeams[i][j])));
               }
             }
             $('#votewait' + i).html(waiting.length ? 'Waiting for: ' + waiting.join(', ') : '');
@@ -177,10 +183,10 @@
             if (IsProposalMeta(j)) continue;
             ++all;
             if (p[j] == 1) {
-              votes.push(' <span class="label label-success">' + DisplayName(NameOfPid(j)) + '</span>');
+              votes.push(' <span class="label label-success">' + HtmlEscape(LabelOfPid(j)) + '</span>');
               ++yes;
             } else {
-              votes.push(' <span class="label label-danger">' + DisplayName(NameOfPid(j)) + '</span>');
+              votes.push(' <span class="label label-danger">' + HtmlEscape(LabelOfPid(j)) + '</span>');
             }
           }
           if (p.auto) {
@@ -203,12 +209,12 @@
           for (var j in p) {
             if (IsProposalMeta(j)) continue;
             votedPids[j] = 1;
-            votes.push('<span class="label label-warning">' + DisplayName(NameOfPid(j)) + '</span>');
+            votes.push('<span class="label label-warning">' + HtmlEscape(LabelOfPid(j)) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
           var waiting = [];
           for (var k in players) {
-            if (votedPids[players[k].pid] == undefined) waiting.push(DisplayName(players[k].name));
+            if (votedPids[players[k].pid] == undefined) waiting.push(HtmlEscape(PlayerLabel(players[k])));
           }
           if (waiting.length) {
             html += '<p class="text-muted">Waiting for: ' + waiting.join(', ') + '</p>';
@@ -230,7 +236,7 @@
         var html = [];
         for (var i in players) {
           var player = players[i];
-          var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '">' + DisplayName(player.name) + '</strong>';
+          var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '">' + HtmlEscape(PlayerLabel(player)) + '</strong>';
           if (started && leader != null && player.pid == leader) {
             item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
           }
@@ -284,8 +290,7 @@
         var canPropose = isLeader && teamSize > 0 && checked == teamSize && winner == null;
         $('#proposebtn').prop('disabled', !canPropose).toggle(isLeader);
         if (!isLeader) {
-          var lname = leader != null ? NameOfPid(leader) : null;
-          $('#teamhint').html(lname != null ? 'Waiting for ' + DisplayName(lname) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
+          $('#teamhint').html(leader != null ? 'Waiting for ' + HtmlEscape(LabelOfPid(leader)) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
         } else if (proposeRound >= 0) {
           $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' players (' + checked + '/' + teamSize + ').');
         } else {
@@ -339,7 +344,7 @@
         var html = '';
         for (var i in players) {
           var player = players[i];
-          html += '<div class="checkbox"><label><input type="checkbox" value="' + HtmlEscape(player.pid) + '">' + DisplayName(player.name) + '</label></div>';
+          html += '<div class="checkbox"><label><input type="checkbox" value="' + HtmlEscape(player.pid) + '">' + HtmlEscape(PlayerLabel(player)) + '</label></div>';
         }
         $('#name_checks').html(html);
         UpdateButtons();

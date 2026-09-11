@@ -147,10 +147,11 @@ function PlayerName(room, pid) {
 
 function PlayerList(room) {
   var list = [];
-  if (room.players != undefined && room.n > 0) {
+  // While a game is running the roster and numbers are frozen; otherwise they follow join order.
+  if (room.players != undefined && room.n > 0 && room.winner == null) {
     for (var i = 0; i < room.players.length; ++i) {
       var pid = room.players[i];
-      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid)});
+      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1});
     }
     return list;
   }
@@ -160,13 +161,13 @@ function PlayerList(room) {
     var pid = order[i];
     if (seen[pid] || !IsOnline(room, pid)) continue;
     seen[pid] = 1;
-    list.push({pid: pid, name: PlayerName(room, pid), online: true});
+    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1});
   }
   for (var s in room.sockets) {
     var pid = PlayerId(room.sockets[s]);
     if (seen[pid]) continue;
     seen[pid] = 1;
-    list.push({pid: pid, name: room.sockets[s].name != undefined ? room.sockets[s].name : 'SOMEONE', online: true});
+    list.push({pid: pid, name: room.sockets[s].name != undefined ? room.sockets[s].name : 'SOMEONE', online: true, number: list.length + 1});
   }
   return list;
 }

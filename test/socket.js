@@ -99,9 +99,12 @@ async function castMission(clients, failPids) {
   const preRejoin = c[2];
   preRejoin.s.close();
   await wait(300);
+  check(c[0].lastPlayers.length === 4, 'roster shrinks before start');
+  check(c[0].lastPlayers.every((p, i) => p.number === i + 1), 'numbers renumbered before start');
   preRejoin.s = (await join(port, preRejoin.room, preRejoin.name, preRejoin.pid)).s;
   await wait(300);
   check(JSON.stringify(c[0].lastPlayers.map(p => p.pid)) === JSON.stringify(orderBeforeStart), 'player order preserved across a pre-start reconnect');
+  check(c[0].lastPlayers.every((p, i) => p.number === i + 1), 'numbers contiguous after rejoin');
   c[0].s.emit('start');
   for (let i = 0; i < 50; i++) {
     if (c[0].lastVotes) break;
@@ -111,6 +114,7 @@ async function castMission(clients, failPids) {
   check(c[0].lastPlayers.length === 5, 'players payload has 5 entries');
   check(c[0].lastPlayers.every(p => p.pid && p.name && p.online), 'players carry pid, name and online');
   check(N5.some(n => 'pid-' + n === v(c).leader), 'leader is a persistent pid');
+  check(c[0].lastPlayers.every((p, i) => p.number === i + 1), 'numbers assigned at start');
   check(v(c).rejected === 0, 'no rejections at start');
 
   // mid-game join is denied, long names are clamped
@@ -140,6 +144,7 @@ async function castMission(clients, failPids) {
   check(c[0].lastPlayers.find(p => p.pid === nonLeader.pid).online === true, 'reconnected player marked online');
   check(c[0].lastPlayers.length === 5, 'roster unchanged after reconnect');
   check(JSON.stringify(c[0].lastPlayers.map(p => p.pid)) === JSON.stringify(orderAtStart), 'player order preserved across a mid-game reconnect');
+  check(JSON.stringify(c[0].lastPlayers.map(p => p.number)) === JSON.stringify([1, 2, 3, 4, 5]), 'numbers frozen during the game');
 
   // name change keeps identity
   const renamed = c.find(x => x !== observer && x.pid !== v(c).leader && x.pid !== nonLeader.pid);

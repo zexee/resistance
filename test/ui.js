@@ -37,7 +37,7 @@ const disabled = (page, sel) => page.$eval(sel, el => el.disabled);
 async function clickBox(page, name) {
   await page.evaluate(n => {
     const labels = Array.from(document.querySelectorAll('#name_checks label'));
-    const label = labels.find(l => l.textContent.trim() === n);
+    const label = labels.find(l => l.textContent.trim().endsWith(n));
     label.querySelector('input').click();
   }, name);
 }
@@ -73,7 +73,7 @@ async function waitVoteButton(page, round) {
 
 async function castMission(pages, round, failNames) {
   const teamText = await text(pages[0], '#voters' + round);
-  const team = teamText.split(', ').filter(Boolean);
+  const team = teamText.split(', ').filter(Boolean).map(s => s.replace(/^\d+\.\s*/, ''));
   for (const name of team) {
     const p = pages[NAMES.indexOf(name)];
     const fn = failNames.indexOf(name) >= 0 ? 'Fail' : 'Pass';
@@ -151,6 +151,7 @@ async function castMission(pages, round, failNames) {
   check(await a.$eval('#score .label', el => getComputedStyle(el).fontSize) === startFont, 'score labels match start button font size');
   check((await text(a, '#rejectinfo')).includes('0/5'), 'reject counter shown to everyone');
   check((await a.$eval('#names', el => el.innerHTML)).includes('fa-star'), 'leader marked in player list');
+  check((await text(a, '#names')).includes('1. '), 'player numbers shown next to names');
 
   // leader-only propose
   const leader = await findLeader(pages);
@@ -158,12 +159,14 @@ async function castMission(pages, round, failNames) {
   const leaderName = await text(leader, '#me');
   check((await text(leader, '#teamhint')).includes('You are the leader'), 'leader sees own hint');
   check(await visible(leader, '#name_checks'), 'leader sees checkboxes');
+  check((await text(leader, '#name_checks')).includes('1. '), 'player numbers shown in the selection list');
   for (const p of pages) {
     if (p === leader) continue;
     await p.waitForFunction(() => document.querySelector('#proposebtn').offsetParent === null);
     check(!(await visible(p, '#proposebtn')), 'non-leader has no propose button');
     check(await p.$eval('#name_checks', el => el.offsetParent === null), 'non-leader checkboxes hidden');
-    check((await text(p, '#teamhint')).includes('Waiting for ' + leaderName), 'non-leader hint names the leader');
+    const hint = await text(p, '#teamhint');
+    check(hint.includes('Waiting for') && hint.includes(leaderName), 'non-leader hint names the leader');
   }
 
   // restart asks for confirmation
@@ -198,6 +201,7 @@ async function castMission(pages, round, failNames) {
   await a.waitForFunction(() => document.querySelector('#proposalbox').offsetParent === null);
   check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden in mission phase');
   check((await text(a, '#voters0')).includes('Alice') && (await text(a, '#voters0')).includes('Bob'), 'mission team displayed');
+  check((await text(a, '#voters0')).includes('1. '), 'mission team shows player numbers');
 
   for (const p of pages) {
     const name = NAMES[pages.indexOf(p)];
@@ -209,7 +213,7 @@ async function castMission(pages, round, failNames) {
     check((await visible(p, 'button[onclick="Pass(0)"]')) === inTeam, 'mission buttons ' + (inTeam ? 'shown' : 'hidden') + ' for ' + name);
   }
 
-  const team = (await text(a, '#voters0')).split(', ').filter(Boolean);
+  const team = (await text(a, '#voters0')).split(', ').filter(Boolean).map(s => s.replace(/^\d+\.\s*/, ''));
   const first = pages[NAMES.indexOf(team[0])];
   await waitVoteButton(first, 0);
   await first.click('button[onclick="Pass(0)"]');
