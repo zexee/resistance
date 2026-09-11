@@ -7,7 +7,7 @@ Real-time companion/scoreboard for the physical board game The Resistance. Roles
 ## Commands
 
 - Install: `npm install`
-- Run: `npm start` (port 7777, override with `PORT`)
+- Run: `npm start` (port 18181, override with `PORT`)
 - `npm test` runs the socket integration test plus the AI integration test (both spawn their own server on a random port). `npm run test:ai` runs only the AI test; it starts a fake OpenAI-compatible endpoint through `AI_CONFIG`. `npm run test:ui` runs the Chrome/Puppeteer UI test (`CHROME_PATH` overrides the default `/usr/bin/google-chrome`). `npm run test:game` plays a full game with 5 AI players against the real model in `ai.config.json` (manual, paid API); pass a model id and `--ais`, `--timeout`, `--retries` flags. The test copy of the config disables model thinking by default (`--thinking=on` keeps it) so games finish quickly. There is no lint or build tooling.
 
 ## Layout

@@ -10,7 +10,7 @@ npm install
 # RUN #
 npm start
 
-default port is 7777, override with PORT
+default port is 18181, override with PORT
 
 # TEST #
 npm test
