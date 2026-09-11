@@ -32,14 +32,42 @@
       var results = [];
       var missionTeams = [];
       var inTeam = false;
-      var playerNames = [];
+      var players = [];
       var teamSize = 0;
       var proposeRound = -1;
       var proposalOpen = false;
       var currentVoten = 0;
       var myVoted = -1;
+      var forcedPid = false;
+      var forcedName = false;
+      var pid = #pid#;
+      function EnsurePid() {
+        // ?pid=name forces an identity, useful to simulate several players in one browser profile.
+        try {
+          var forced = new URLSearchParams(window.location.search).get('pid');
+          if (forced != null && forced != '') {
+            pid = forced;
+            forcedPid = true;
+            return;
+          }
+        } catch (e) {}
+        if (pid == null) {
+          pid = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
+      }
+      EnsurePid();
       function HtmlEscape(s) {
         return $('<div/>').text(s == undefined ? '' : s).html();
+      }
+      function PlayerById(p) {
+        for (var i in players) {
+          if (players[i].pid == p) return players[i];
+        }
+        return null;
+      }
+      function NameOfPid(p) {
+        var player = PlayerById(p);
+        return player == null ? null : player.name;
       }
       function RawName(name) {
         if (name == undefined) return 'SOMEONE';
@@ -49,16 +77,19 @@
           return name;
         }
       }
+      function NamesOfPids(pids) {
+        var names = [];
+        for (var i in pids) {
+          var name = NameOfPid(pids[i]);
+          names.push(RawName(name));
+        }
+        return names.join(', ');
+      }
       function DisplayName(name) {
         return HtmlEscape(RawName(name));
       }
-      function NamesOfList(list) {
-        var names = [];
-        for (var i in list) names.push(RawName(list[i]));
-        return names.join(', ');
-      }
       function IsLeader() {
-        return started && leader != null && leader == encodeURIComponent(me);
+        return started && leader != null && leader == pid;
       }
       function IsProposalMeta(k) {
         return k == 'text' || k == 'who' || k == 'round' || k == 'team' || k == 'auto';
@@ -73,7 +104,8 @@
         winner = data.winner;
         results = data.results;
         missionTeams = data.mission_teams;
-        inTeam = data.mission_team.indexOf(encodeURIComponent(me)) >= 0;
+        players = data.players;
+        inTeam = data.mission_team.indexOf(pid) >= 0;
         if (proposeRound != data.current_round) {
           $('#name_checks input[type=checkbox]').prop('checked', false);
         }
@@ -118,15 +150,17 @@
             $('#' + i).parent().parent().removeClass('bg-success');
             $('#' + i).parent().parent().removeClass('bg-danger');
           }
-          $('#voters' + i).html(missionTeams[i] ? HtmlEscape(NamesOfList(missionTeams[i])) : '');
+          $('#voters' + i).html(missionTeams[i] ? HtmlEscape(NamesOfPids(missionTeams[i])) : '');
           $('#voten' + i).html(data[i].n + ' players');
           $('#failneed' + i).html(data.fail_need[i] + ' to fail');
           if (started && phase == 'mission' && i == proposeRound) {
             var waiting = [];
-            var voted = {};
-            for (var j in data[i].voted) voted[data[i].voted[j]] = 1;
+            var votedPids = {};
+            for (var j in data[i].voted) votedPids[data[i].voted[j]] = 1;
             for (var j in missionTeams[i]) {
-              if (voted[missionTeams[i][j]] == undefined) waiting.push(DisplayName(missionTeams[i][j]));
+              if (votedPids[missionTeams[i][j]] == undefined) {
+                waiting.push(DisplayName(NameOfPid(missionTeams[i][j])));
+              }
             }
             $('#votewait' + i).html(waiting.length ? 'Waiting for: ' + waiting.join(', ') : '');
           } else {
@@ -143,10 +177,10 @@
             if (IsProposalMeta(j)) continue;
             ++all;
             if (p[j] == 1) {
-              votes.push(' <span class="label label-success">' + DisplayName(j) + '</span>');
+              votes.push(' <span class="label label-success">' + DisplayName(NameOfPid(j)) + '</span>');
               ++yes;
             } else {
-              votes.push(' <span class="label label-danger">' + DisplayName(j) + '</span>');
+              votes.push(' <span class="label label-danger">' + DisplayName(NameOfPid(j)) + '</span>');
             }
           }
           if (p.auto) {
@@ -165,16 +199,16 @@
           var p = data.proposal;
           html += '<h3>Mission ' + (p.round + 1) + ': <span style="font-weight:bold">' + DisplayName(p.who) + '</span>: <span class="text-primary">' + DisplayName(p.text) + '</span></h3>'
           var votes = [];
-          var votedNames = {};
+          var votedPids = {};
           for (var j in p) {
             if (IsProposalMeta(j)) continue;
-            votedNames[j] = 1;
-            votes.push('<span class="label label-warning">' + DisplayName(j) + '</span>');
+            votedPids[j] = 1;
+            votes.push('<span class="label label-warning">' + DisplayName(NameOfPid(j)) + '</span>');
           }
           html += '<p>' + votes.join(' ') + '</p>';
           var waiting = [];
-          for (var k in playerNames) {
-            if (votedNames[playerNames[k]] == undefined) waiting.push(DisplayName(playerNames[k]));
+          for (var k in players) {
+            if (votedPids[players[k].pid] == undefined) waiting.push(DisplayName(players[k].name));
           }
           if (waiting.length) {
             html += '<p class="text-muted">Waiting for: ' + waiting.join(', ') + '</p>';
@@ -194,11 +228,14 @@
       }
       function UpdateNames() {
         var html = [];
-        for (var i in playerNames) {
-          var name = playerNames[i];
-          var item = '<strong class="text-primary">' + DisplayName(name) + '</strong>';
-          if (started && leader != null && name == leader) {
+        for (var i in players) {
+          var player = players[i];
+          var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '">' + DisplayName(player.name) + '</strong>';
+          if (started && leader != null && player.pid == leader) {
             item += ' <i class="fa fa-star text-warning" title="Leader"></i>';
+          }
+          if (player.online === false) {
+            item += ' <i class="fa fa-chain-broken" title="Disconnected"></i>';
           }
           html.push(item);
         }
@@ -241,12 +278,14 @@
         var checked = boxes.filter(':checked').length;
         $('#name_checks').toggle(isLeader);
         boxes.each(function () {
-          this.disabled = !this.checked && checked >= teamSize;
+          var player = PlayerById(this.value);
+          this.disabled = (player != null && player.online === false) || (!this.checked && checked >= teamSize);
         });
         var canPropose = isLeader && teamSize > 0 && checked == teamSize && winner == null;
         $('#proposebtn').prop('disabled', !canPropose).toggle(isLeader);
         if (!isLeader) {
-          $('#teamhint').html(leader != null ? 'Waiting for ' + DisplayName(leader) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
+          var lname = leader != null ? NameOfPid(leader) : null;
+          $('#teamhint').html(lname != null ? 'Waiting for ' + DisplayName(lname) + ' to propose mission ' + (proposeRound + 1) + ' (team of ' + teamSize + ')' : '');
         } else if (proposeRound >= 0) {
           $('#teamhint').html('You are the leader: mission ' + (proposeRound + 1) + ': select exactly ' + teamSize + ' players (' + checked + '/' + teamSize + ').');
         } else {
@@ -293,14 +332,14 @@
           $('#gameinstruction').hide();
         }
         $('#startbtn').toggle(data.room != 'Lobby');
-        joined = data.names.length;
+        players = data.players;
+        joined = players.length;
         $('#joined').html(joined);
-        playerNames = data.names;
         UpdateNames();
         var html = '';
-        for (var i in data.names) {
-          var name = data.names[i];
-          html += '<div class="checkbox"><label><input type="checkbox" value="' + HtmlEscape(name) + '">' + DisplayName(name) + '</label></div>';
+        for (var i in players) {
+          var player = players[i];
+          html += '<div class="checkbox"><label><input type="checkbox" value="' + HtmlEscape(player.pid) + '">' + DisplayName(player.name) + '</label></div>';
         }
         $('#name_checks').html(html);
         UpdateButtons();
@@ -308,19 +347,37 @@
       var me = #name#;
       var room = #room#;
       var socket = null;
+      function SaveName() {
+        var data = {};
+        if (!forcedName && me != undefined) data.name = me;
+        if (room != undefined) data.room = room;
+        if (!forcedPid) data.pid = pid;
+        $.post('/setname', data, function(res) {
+          console.log(res);
+        });
+      }
+      function ApplyForcedName() {
+        // ?name=Bob forces the display name without overwriting the shared cookie.
+        try {
+          var forced = new URLSearchParams(window.location.search).get('name');
+          if (forced != null && forced != '') {
+            me = forced;
+            forcedName = true;
+          }
+        } catch (e) {}
+      }
       function ChangeName() {
         me = prompt("Please enter your name", me == null ? "Harry Potter" : me);
         if (me == null) return;
-        $.post('/setname', {name: me, room: room}, function(data) {
-          console.log(data);
-        });
+        SaveName();
         $('#me').html(HtmlEscape(me));
         if (socket != null) {
-          socket.emit('me', {'name': encodeURIComponent(me), 'room': room});
+          socket.emit('me', {'name': encodeURIComponent(me), 'room': room, 'pid': pid});
         }
       }
       function Connect() {
         $('#lobbyrules').html($('#rules-modal .modal-body').html());
+        ApplyForcedName();
         if (me == null) {
           ChangeName();
         }
@@ -328,7 +385,7 @@
         socket = io();
         socket.on('connect', function(data) {
           $('#WARNING').html('CONNECTED');
-          socket.emit('me', {'name': encodeURIComponent(me), 'room': room});
+          socket.emit('me', {'name': encodeURIComponent(me), 'room': room, 'pid': pid});
         });
         socket.on('disconnect', function(data) {
           $('#WARNING').html('DISCONNECTED');
@@ -338,9 +395,7 @@
         });
         socket.on('join', function(data) {
           Join(data);
-          $.post('/setname', {name: me, room: room}, function(data) {
-            console.log(data);
-          });
+          SaveName();
         });
         socket.on('role', function(data) {
           started = true;

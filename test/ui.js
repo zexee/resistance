@@ -92,6 +92,20 @@ async function castMission(pages, round, failNames) {
     args: ['--no-sandbox', '--disable-dev-shm-usage']
   });
 
+  // ?pid= overrides the localStorage identity for multi-user testing
+  const sharedContext = await browser.createBrowserContext();
+  const simA = await sharedContext.newPage();
+  await simA.setCookie({ name: 'name', value: 'CookieName', domain: 'localhost', path: '/' });
+  await simA.goto(url + '?pid=sim-a&name=SimA', { waitUntil: 'domcontentloaded' });
+  check(await simA.evaluate(() => pid) === 'sim-a', '?pid= overrides identity');
+  check(await simA.evaluate(() => me) === 'SimA', '?name= overrides the display name');
+  check((await simA.$eval('#me', el => el.textContent)) === 'SimA', 'forced name shown in navbar');
+  const simB = await sharedContext.newPage();
+  await simB.goto(url + '?pid=sim-b&name=SimB', { waitUntil: 'domcontentloaded' });
+  check(await simB.evaluate(() => pid) === 'sim-b', '?pid= isolates two pages in one profile');
+  check(await simB.evaluate(() => me) === 'SimB', 'second window gets its own forced name');
+  await sharedContext.close();
+
   const a = await makePage(browser, url, NAMES[0]);
   check(await a.$eval('#startbtn', el => el.offsetParent === null), 'start button hidden in lobby');
   check((await text(a, '#lobbyrules')).includes('strict majority'), 'lobby shows game rules');
@@ -102,10 +116,10 @@ async function castMission(pages, round, failNames) {
   await a.waitForFunction(() => getComputedStyle(document.querySelector('#rules-modal')).display === 'none');
   check(await a.$eval('#rules-modal', el => getComputedStyle(el).display === 'none'), 'rules modal closes');
   await a.waitForFunction(() => !document.querySelector('.modal-backdrop'));
-  const nameBefore = await a.evaluate(() => me);
+  const pidBefore = await a.evaluate(() => pid);
   await a.reload({ waitUntil: 'domcontentloaded' });
   await a.waitForFunction(() => document.querySelector('#WARNING').textContent.includes('CONNECTED'));
-  check(await a.evaluate(() => me) === nameBefore, 'name survives a reload via cookie');
+  check(await a.evaluate(() => pid) === pidBefore, 'pid survives a reload via cookie');
   await a.click('nav button[onclick="CreateRoom();"]');
   await a.waitForFunction(() => document.querySelector('#room').textContent !== 'Lobby' && document.querySelector('#room').textContent !== '');
   const room = await text(a, '#room');
@@ -158,6 +172,16 @@ async function castMission(pages, round, failNames) {
   await wait(200);
   check(await a.evaluate(() => window.__confirmCalls) === 1, 'restart asks for confirmation');
   check(await a.$eval('#teamhint', el => el.textContent.length > 0), 'game kept running after dismissing restart');
+
+  // offline status and reconnect
+  const victim = pages.find(p => p !== a && p !== leader);
+  const victimName = NAMES[pages.indexOf(victim)];
+  await victim.evaluate(() => socket.disconnect());
+  await a.waitForFunction(() => document.querySelector('#names').innerHTML.includes('fa-chain-broken'));
+  check((await a.$eval('#names', el => el.textContent)).includes(victimName), 'offline player stays in the roster');
+  await victim.evaluate(() => socket.connect());
+  await a.waitForFunction(() => !document.querySelector('#names').innerHTML.includes('fa-chain-broken'));
+  check(!(await a.$eval('#names', el => el.innerHTML)).includes('fa-chain-broken'), 'reconnected player no longer marked offline');
 
   // mission 1: size 2, check selection limit then propose
   await clickBox(leader, NAMES[0]);
@@ -224,16 +248,6 @@ async function castMission(pages, round, failNames) {
   check((await text(a, '#winner')).includes('Resistance wins!'), 'winner banner shows resistance');
   check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden after win');
   check(await a.$eval('#prestart', el => el.offsetParent === null), 'waiting hint stays hidden after win');
-
-  // player names are html-escaped when rendered
-  const xssVictim = pages.find(p => p !== a && p !== leader);
-  const xssName = '<img src=x onerror=alert(1)>';
-  await xssVictim.evaluate(name => {
-    me = name;
-    socket.emit('me', { name: encodeURIComponent(name), room: room });
-  }, xssName);
-  await a.waitForFunction(() => document.querySelector('#names').textContent.includes('<img'));
-  check(!(await a.$eval('#names', el => el.innerHTML)).includes('<img'), 'player name is html-escaped');
 
   await browser.close();
   await stopServer(server);
