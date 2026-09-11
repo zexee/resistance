@@ -364,7 +364,7 @@ async function castMission(pages, round, failNames) {
   }));
   const aiServer = await startServer({ AI_CONFIG: cfgPath });
   const b = await makePage(browser, 'http://localhost:' + aiServer.port, 'AiHost');
-  check(await b.$eval('#aibtn', el => el.offsetParent !== null), 'AI button always visible, even outside a room');
+  check(await b.$eval('#aibtn', el => el.offsetParent === null), 'AI button hidden outside a room');
   const navButtons = await b.$$eval('.navbar-collapse button', els => els.map(el => el.textContent.trim()));
   check(navButtons[navButtons.length - 1].includes('规则'), 'Rule button stays last in the navbar');
   const ruleGap = await b.evaluate(() => {

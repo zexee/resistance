@@ -528,7 +528,7 @@
           <button class="btn navbar-btn btn-info" onclick="CreateRoom();"><i class="fa fa-lg fa-plus-square"></i> 创建</button>
           <button class="btn navbar-btn btn-info" onclick="JoinRoom();"><i class="fa fa-lg fa-sign-in"></i> 加入</button>
           <button class="btn navbar-btn btn-info" onclick="LeaveRoom();"><i class="fa fa-lg fa-sign-out"></i> 离开</button>
-          <button class="btn navbar-btn btn-info" id="aibtn" type="button"><i class="fa fa-lg fa-microchip"></i> 添加 AI</button>
+          <button class="btn navbar-btn btn-info" id="aibtn" type="button" style="display:none"><i class="fa fa-lg fa-microchip"></i> 添加 AI</button>
           <button class="btn navbar-btn btn-info pull-right" data-toggle="modal" data-target="#rules-modal"><i class="fa fa-lg fa-book"></i> 规则</button>
         </div>
       </div>
