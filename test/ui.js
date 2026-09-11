@@ -356,6 +356,12 @@ async function castMission(pages, round, failNames) {
   check((await text(a, '#winner')).includes('抵抗组织获胜！'), 'winner banner shows resistance');
   check(await a.$eval('#proposalbox', el => el.offsetParent === null), 'proposal box hidden after win');
   check(await a.$eval('#prestart', el => el.offsetParent === null), 'waiting hint stays hidden after win');
+  check((await text(a, '#names')).includes('间谍') && (await text(a, '#names')).includes('抵抗军'), 'every role revealed after the game');
+  const winnerLayout = await a.$eval('#winner', el => {
+    const inner = el.querySelector('.col-xs-12');
+    return { row: el.classList.contains('row'), first: document.getElementById('gamepad').children[0] === el, align: inner ? getComputedStyle(inner).textAlign : null };
+  });
+  check(winnerLayout.row && winnerLayout.first && winnerLayout.align === 'center', 'winner banner is the first full-width centered row in the room');
 
   // ---- AI panel ----
   const fake = await startFakeLlm();

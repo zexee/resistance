@@ -260,6 +260,9 @@
           var player = players[i];
           var title = player.ai ? ' title="' + AttrEscape(player.model != undefined ? player.model : 'AI') + '"' : '';
           var item = '<strong class="' + (player.online === false ? 'text-muted' : 'text-primary') + '"' + title + '>' + HtmlEscape(PlayerLabel(player)) + '</strong>';
+          if (winner != null && player.role != undefined) {
+            item += player.role == 0 ? ' <span class="label label-danger">间谍</span>' : ' <span class="label label-success">抵抗军</span>';
+          }
           if (player.ai) {
             item += ' <i class="fa fa-microchip text-info"' + title + '></i>';
             if (!started || winner != null) {
@@ -289,8 +292,8 @@
         $('#prestart').toggle(!started);
         $('#surrenderbtn').toggle(started && winner == null);
         $('#winner').toggle(winner != null);
-        if (winner == 'resistance') $('#winner').html('<h3><span class="label label-success">抵抗组织获胜！</span></h3>');
-        else if (winner == 'spies') $('#winner').html('<h3><span class="label label-danger">间谍获胜！</span></h3>');
+        if (winner == 'resistance') $('#winner').html('<div class="col-xs-12 text-center"><h3><span class="label label-success">抵抗组织获胜！</span></h3></div>');
+        else if (winner == 'spies') $('#winner').html('<div class="col-xs-12 text-center"><h3><span class="label label-danger">间谍获胜！</span></h3></div>');
         if (started) {
           var resistance = 0;
           var spies = 0;
@@ -543,8 +546,8 @@
     <div class="container-fluid">
       <h2><button class="btn btn-danger" id="startbtn" style="display:none" disabled onclick="Start();"><i class="fa fa-lg fa-star"></i> 开始</button> <button class="btn btn-warning" id="surrenderbtn" style="display:none" onclick="Surrender();"><i class="fa fa-lg fa-flag"></i> 投降</button> <i class="fa fa-home"></i> (<span style="font-weight:bolder;" id="joined"></span>): <span id="names"></span> <span id="score"></span></h2>
       <div id="gamepad">
+        <div class="row" id="winner" style="display:none"></div>
         <h4 id="prestart">等待游戏开始……</h4>
-        <div id="winner" style="display:none"></div>
         <div class="row">
           <div class="col-lg-4 col-md-6" id="proposalbox" style="display:none">
             <div class="panel panel-primary">

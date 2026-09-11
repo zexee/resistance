@@ -150,12 +150,14 @@ function PlayerName(room, pid) {
 
 function PlayerList(room) {
   var list = [];
+  // Reveal every role once the game is over.
+  var reveal = room.winner != null && room.roleByPid != null;
   // While a game is running the roster and numbers are frozen; otherwise they follow join order.
   if (room.players != undefined && room.n > 0 && room.winner == null) {
     for (var i = 0; i < room.players.length; ++i) {
       var pid = room.players[i];
       var isAi = ai.IsAi(room, pid);
-      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1, ai: isAi ? 1 : undefined, model: isAi ? ai.ModelOf(room, pid) : undefined});
+      list.push({pid: pid, name: PlayerName(room, pid), online: IsOnline(room, pid), number: i + 1, ai: isAi ? 1 : undefined, model: isAi ? ai.ModelOf(room, pid) : undefined, role: reveal ? room.roleByPid[pid] : undefined});
     }
     return list;
   }
@@ -166,7 +168,7 @@ function PlayerList(room) {
     if (seen[pid] || !IsOnline(room, pid)) continue;
     seen[pid] = 1;
     var isAi = ai.IsAi(room, pid);
-    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1, ai: isAi ? 1 : undefined, model: isAi ? ai.ModelOf(room, pid) : undefined});
+    list.push({pid: pid, name: PlayerName(room, pid), online: true, number: list.length + 1, ai: isAi ? 1 : undefined, model: isAi ? ai.ModelOf(room, pid) : undefined, role: reveal ? room.roleByPid[pid] : undefined});
   }
   for (var s in room.sockets) {
     var pid = PlayerId(room.sockets[s]);
